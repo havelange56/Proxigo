@@ -57,7 +57,67 @@
     <a class="button" href="#services">Découvrir les services</a>
     <details>
   <summary class="button">Publier une demande</summary>
-  <form class="service" onsubmit="return false">
+  <form id="connexion-client" class="service" onsubmit="return false">
+  <p><label>Adresse e-mail<br>
+    <input name="email" type="email" autocomplete="username" required>
+  </label></p>
+  <p><label>Mot de passe<br>
+    <input name="password" type="password" autocomplete="current-password" required>
+  </label></p>
+  <button type="submit" disabled>Se connecter</button>
+</form>
+<button id="deconnexion-client" type="button" hidden>Se déconnecter</button>
+<p id="etat-connexion" role="status"></p>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+  const connexion = document.getElementById('connexion-client');
+  const boutonConnexion = connexion.querySelector('button');
+  const deconnexion = document.getElementById('deconnexion-client');
+  const etatConnexion = document.getElementById('etat-connexion');
+
+  if (window.supabase) {
+    const proxiGo = window.supabase.createClient(
+      'https://xxqobojmdmxihpwcjnkw.supabase.co',
+      'sb_publishable_wNCVHsFVdqp_q66rr3V1IQ_vH8o58kC'
+    );
+
+    proxiGo.auth.onAuthStateChange((_evenement, session) => {
+      connexion.hidden = Boolean(session);
+      deconnexion.hidden = !session;
+      etatConnexion.textContent = session ? 'Tu es connecté.' : '';
+      boutonConnexion.disabled = false;
+    });
+
+    connexion.addEventListener('submit', async (evenement) => {
+      evenement.preventDefault();
+      boutonConnexion.disabled = true;
+      etatConnexion.textContent = 'Connexion en cours…';
+      const champs = new FormData(connexion);
+
+      try {
+        const { error } = await proxiGo.auth.signInWithPassword({
+          email: champs.get('email').trim(),
+          password: champs.get('password')
+        });
+        if (error) throw error;
+        connexion.reset();
+      } catch {
+        etatConnexion.textContent = 'Connexion impossible. Vérifie tes identifiants et réessaie.';
+      } finally {
+        boutonConnexion.disabled = false;
+      }
+    });
+
+    deconnexion.addEventListener('click', async () => {
+      const { error } = await proxiGo.auth.signOut({ scope: 'local' });
+      if (error) etatConnexion.textContent = 'Déconnexion impossible. Réessaie.';
+    });
+  } else {
+    etatConnexion.textContent = 'Connexion indisponible. Recharge la page.';
+  }
+</script>
+      <form class="service" onsubmit="return false">
   <p><label>Titre de la demande<br>
     <input name="title" type="text" required>
   </label></p>
