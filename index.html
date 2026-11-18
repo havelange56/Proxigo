@@ -140,7 +140,60 @@
             lieu.textContent = city;
             texte.textContent = description;
             carte.append(titre, lieu, texte);
-            
+                        const reponse = document.createElement('details');
+            reponse.innerHTML = `
+              <summary>Répondre à cette demande</summary>
+              <form>
+                <p><label>Prix proposé en euros<br>
+                  <input name="prix" type="number" min="0.01" step="0.01"
+                    inputmode="decimal" required>
+                </label></p>
+                <p><label>Ton message<br>
+                  <textarea name="message" rows="3" required></textarea>
+                </label></p>
+                <button type="submit">Envoyer mon offre</button>
+                <p role="status"></p>
+              </form>
+            `;
+            carte.append(reponse);
+
+            const offre = reponse.querySelector('form');
+            const envoyerOffre = offre.querySelector('button');
+            const etatOffre = offre.querySelector('[role="status"]');
+
+            offre.addEventListener('submit', async (evenement) => {
+              evenement.preventDefault();
+              if (envoyerOffre.disabled || compte !== compteConnecte) return;
+
+              const champs = new FormData(offre);
+              const texteOffre = champs.get('message').trim();
+              if (!texteOffre) {
+                etatOffre.textContent = 'Écris un message avant d’envoyer.';
+                return;
+              }
+
+              envoyerOffre.disabled = true;
+              etatOffre.textContent = 'Envoi en cours…';
+
+              try {
+                const { error } = await proxiGo.from('service_offers').insert({
+                  request_id: id,
+                  provider_id: compte,
+                  proposed_price: champs.get('prix'),
+                  message: texteOffre,
+                  status: 'pending'
+                });
+
+                if (error) throw error;
+                offre.reset();
+                etatOffre.textContent = 'Ton offre a bien été envoyée.';
+              } catch (erreur) {
+                envoyerOffre.disabled = false;
+                etatOffre.textContent = erreur.code === '42501'
+                  ? 'Seul un compte prestataire peut répondre à une demande ouverte.'
+                  : 'L’envoi de ton offre n’a pas pu être confirmé.';
+              }
+            });
                       return carte;
           });
 
