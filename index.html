@@ -85,7 +85,76 @@
     boutonOubli.type = 'button';
     boutonOubli.textContent = 'Mot de passe oublié';
     connexion.append(boutonOubli);
+    document.addEventListener('DOMContentLoaded', () => {
+      const categorie = document.querySelector('select[name="category_id"]');
+      const demande = categorie.form;
+      const message = demande.lastElementChild;
+      const envoyer = document.createElement('button');
 
+      envoyer.type = 'submit';
+      envoyer.textContent = 'Envoyer la demande';
+      envoyer.disabled = true;
+      message.before(envoyer);
+      message.setAttribute('role', 'status');
+      message.textContent = 'Connecte-toi pour envoyer une demande.';
+
+      let connecte = false;
+      let enCours = false;
+
+      proxiGo.auth.onAuthStateChange((_evenement, session) => {
+        connecte = Boolean(session);
+        envoyer.disabled = !connecte || enCours;
+        if (!enCours) {
+          message.textContent = connecte ? '' : 'Connecte-toi pour envoyer une demande.';
+        }
+      });
+
+      demande.addEventListener('submit', async (evenement) => {
+        evenement.preventDefault();
+        if (!connecte || enCours) return;
+
+        const champs = new FormData(demande);
+        const titre = champs.get('title').trim();
+        const ville = champs.get('city').trim();
+        const description = champs.get('description').trim();
+
+        if (!titre || !ville || !description) {
+          message.textContent = 'Complète le titre, la ville et la description.';
+          return;
+        }
+
+        enCours = true;
+        envoyer.disabled = true;
+        message.textContent = 'Envoi en cours…';
+
+        try {
+          const { data, error: erreurConnexion } = await proxiGo.auth.getUser();
+          if (erreurConnexion || !data.user) {
+            message.textContent = 'Reconnecte-toi, puis réessaie.';
+            return;
+          }
+
+          const { error } = await proxiGo.from('service_requests').insert({
+            client_id: data.user.id,
+            category_id: Number(categorie.value),
+            title: titre,
+            city: ville,
+            description
+          });
+
+          if (error) throw error;
+          demande.reset();
+          message.textContent = 'Ta demande a bien été publiée.';
+        } catch (erreur) {
+          message.textContent = erreur.code === '42501'
+            ? 'Connecte-toi avec un compte client pour publier une demande.'
+            : 'La publication n’a pas pu être confirmée.';
+        } finally {
+          enCours = false;
+          envoyer.disabled = !connecte;
+        }
+      });
+    });
     const formulaireNouveauMotDePasse = document.createElement('form');
     formulaireNouveauMotDePasse.className = 'service';
     formulaireNouveauMotDePasse.hidden = true;
