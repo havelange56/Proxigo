@@ -85,6 +85,75 @@
     boutonOubli.type = 'button';
     boutonOubli.textContent = 'Mot de passe oublié';
     connexion.append(boutonOubli);
+        document.addEventListener('DOMContentLoaded', () => {
+      const section = document.createElement('section');
+      section.className = 'services';
+      section.hidden = true;
+      section.innerHTML = `
+        <h2>Demandes ouvertes</h2>
+        <button type="button">Afficher les demandes</button>
+        <p role="status"></p>
+        <div></div>
+      `;
+      document.getElementById('services').after(section);
+
+      const bouton = section.querySelector('button');
+      const message = section.querySelector('[role="status"]');
+      const liste = section.querySelector('div');
+      let compteConnecte = null;
+
+      proxiGo.auth.onAuthStateChange((_evenement, session) => {
+        const compte = session?.user?.id ?? null;
+        if (compte !== compteConnecte) {
+          liste.replaceChildren();
+          message.textContent = '';
+        }
+        compteConnecte = compte;
+        section.hidden = !compte;
+        section.style.display = compte ? '' : 'none';
+      });
+
+      bouton.addEventListener('click', async () => {
+        const compte = compteConnecte;
+        if (!compte) return;
+
+        bouton.disabled = true;
+        message.textContent = 'Chargement des demandes…';
+
+        try {
+          const { data, error } = await proxiGo.from('service_requests')
+            .select('title,city,description')
+            .eq('status', 'open')
+            .order('created_at', { ascending: false })
+            .limit(20);
+
+          if (compte !== compteConnecte) return;
+          if (error) throw error;
+
+          const cartes = data.map(({ title, city, description }) => {
+            const carte = document.createElement('article');
+            carte.className = 'service';
+            const titre = document.createElement('h3');
+            const lieu = document.createElement('p');
+            const texte = document.createElement('p');
+            titre.textContent = title;
+            lieu.textContent = city;
+            texte.textContent = description;
+            carte.append(titre, lieu, texte);
+            return carte;
+          });
+
+          liste.replaceChildren(...cartes);
+          message.textContent = cartes.length ? '' : 'Aucune demande ouverte pour le moment.';
+        } catch {
+          if (compte === compteConnecte) {
+            message.textContent = 'Impossible de charger les demandes. Réessaie.';
+          }
+        } finally {
+          bouton.disabled = false;
+        }
+      });
+    });
     document.addEventListener('DOMContentLoaded', () => {
       const categorie = document.querySelector('select[name="category_id"]');
       const demande = categorie.form;
