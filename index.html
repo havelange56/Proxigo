@@ -81,7 +81,77 @@
       'https://xxqobojmdmxihpwcjnkw.supabase.co',
       'sb_publishable_wNCVHsFVdqp_q66rr3V1IQ_vH8o58kC'
     );
+    const boutonOubli = document.createElement('button');
+    boutonOubli.type = 'button';
+    boutonOubli.textContent = 'Mot de passe oublié';
+    connexion.append(boutonOubli);
 
+    const formulaireNouveauMotDePasse = document.createElement('form');
+    formulaireNouveauMotDePasse.className = 'service';
+    formulaireNouveauMotDePasse.hidden = true;
+    formulaireNouveauMotDePasse.innerHTML = `
+      <p><label>Nouveau mot de passe<br>
+        <input name="nouveau" type="password" autocomplete="new-password"
+          minlength="8" required>
+      </label></p>
+      <button type="submit">Enregistrer le nouveau mot de passe</button>
+      <p role="status"></p>
+    `;
+    etatConnexion.after(formulaireNouveauMotDePasse);
+
+    boutonOubli.addEventListener('click', async () => {
+      const email = connexion.elements.namedItem('email');
+      if (!email.reportValidity()) return;
+
+      boutonOubli.disabled = true;
+      etatConnexion.textContent = 'Envoi en cours…';
+      try {
+        const { error } = await proxiGo.auth.resetPasswordForEmail(
+          email.value.trim(),
+          { redirectTo: 'https://havelange56.github.io/Proxigo/' }
+        );
+        if (error) throw error;
+        etatConnexion.textContent =
+          'Si cette adresse est associée à un compte, tu recevras un lien par e-mail.';
+      } catch {
+        etatConnexion.textContent = 'Envoi impossible. Réessaie dans un moment.';
+      } finally {
+        boutonOubli.disabled = false;
+      }
+    });
+
+    proxiGo.auth.onAuthStateChange((evenement, session) => {
+      if (evenement === 'PASSWORD_RECOVERY' && session) {
+        formulaireNouveauMotDePasse.hidden = false;
+        connexion.closest('details').open = true;
+      }
+      if (evenement === 'SIGNED_OUT') {
+        formulaireNouveauMotDePasse.hidden = true;
+        formulaireNouveauMotDePasse.reset();
+      }
+    });
+
+    formulaireNouveauMotDePasse.addEventListener('submit', async (evenement) => {
+      evenement.preventDefault();
+      const bouton = formulaireNouveauMotDePasse.querySelector('button');
+      const message = formulaireNouveauMotDePasse.querySelector('[role="status"]');
+      const nouveau = formulaireNouveauMotDePasse.elements.namedItem('nouveau');
+      bouton.disabled = true;
+      message.textContent = 'Enregistrement en cours…';
+
+      try {
+        const { error } = await proxiGo.auth.updateUser({ password: nouveau.value });
+        if (error) throw error;
+        formulaireNouveauMotDePasse.reset();
+        formulaireNouveauMotDePasse.hidden = true;
+        etatConnexion.textContent = 'Ton mot de passe a été changé. Tu es connecté.';
+      } catch {
+        message.textContent =
+          'Impossible de changer le mot de passe. Réessaie ou demande un nouveau lien.';
+      } finally {
+        bouton.disabled = false;
+      }
+    });
     proxiGo.auth.onAuthStateChange((_evenement, session) => {
       connexion.hidden = Boolean(session);
       deconnexion.hidden = !session;
