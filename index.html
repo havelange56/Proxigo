@@ -64,5 +64,37 @@
     </section>
     <p>Bientôt : demandes et offres de services !</p>
   </main>
-</body>
+  <script>
+  async function afficherCategories() {
+    const liste = document.getElementById('services');
+    const url = 'https://xxqobojmdmxihpwcjnkw.supabase.co/rest/v1/categories?select=name_fr&order=name_fr.asc';
+
+    try {
+      const reponse = await fetch(url, {
+        headers: { apikey: 'sb_publishable_wNCVHsFVdqp_q66rr3V1IQ_vH8o58kC' }
+      });
+
+      if (!reponse.ok) throw new Error('Chargement impossible');
+
+      const categories = await reponse.json();
+      if (categories.length === 0) return;
+
+      const cartes = categories.map(({ name_fr }) => {
+        const carte = document.createElement('div');
+        carte.className = 'service';
+        carte.textContent = name_fr;
+        return carte;
+      });
+
+      liste.replaceChildren(...cartes);
+    } catch (erreur) {
+      console.error('Catégories ProxiGo', erreur);
+    }
+  }
+
+  afficherCategories();
+</script>
+  </body>
 </html>
+
+
