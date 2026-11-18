@@ -57,7 +57,18 @@
     <a class="button" href="#services">Découvrir les services</a>
     <details>
   <summary class="button">Publier une demande</summary>
-  <p>Le formulaire de demande sera bientôt disponible.</p>
+  <form class="service" onsubmit="return false">
+  <p><label>Titre de la demande<br>
+    <input name="title" type="text" required>
+  </label></p>
+  <p><label>Ville<br>
+    <input name="city" type="text" required>
+  </label></p>
+  <p><label>Décris le service dont tu as besoin<br>
+    <textarea name="description" rows="4" required></textarea>
+  </label></p>
+  <p>Le choix de la catégorie et l’envoi seront activés à la prochaine étape.</p>
+</form>
 </details>
     <section id="services" class="services">
       <div class="service">🔧 Bricolage</div>
