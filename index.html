@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="fr">
 <head>
@@ -408,7 +407,7 @@
     <option value="11">Transport</option>
   </select>
 </label></p>
-<p>L’envoi des demandes sera activé à la prochaine étape.</p>
+<p>Connecte-toi pour envoyer une demande.</p>
 </form>
 </details>
     <section id="services" class="services">
@@ -418,7 +417,7 @@
       <div class="service">🚚 Déménagement</div>
       <div class="service">🐾 Services aux animaux</div>
     </section>
-    <p>Bientôt : demandes et offres de services !</p>
+    
   </main>
   <script>
   async function afficherCategories() {
@@ -450,43 +449,5 @@
 
   afficherCategories();
 </script>
-  
-<section id="espace-prestataires">
-  <h2>Demandes des clients</h2>
-  <div id="liste-demandes"></div>
-</section>
-<script>
-async function afficherDemandes() {
-  const { data, error } = await supabase
-    .from('open_service_requests')
-    .select('*');
-
-  if (error) {
-    console.error(error);
-    return;
-  }
-
-  const liste = document.getElementById('liste-demandes');
-  if (!liste) return;
-
-  liste.replaceChildren();
-
-  data.forEach(demande => {
-    const carte = document.createElement('div');
-    const titre = document.createElement('h3');
-    const ville = document.createElement('p');
-
-    titre.textContent = demande.title;
-    ville.textContent = demande.city;
-
-    carte.append(titre, ville);
-    liste.appendChild(carte);
-  });
-}
-
-afficherDemandes();
-</script>
   </body>
 </html>
-
-
