@@ -1240,6 +1240,24 @@ async function envoyerMessage(destinataire, contenu) {
   if (error) alert(error.message);
 }
 
+async function afficherMessages() {
+  const { data: utilisateur } = await supabase.auth.getUser();
+  if (!utilisateur.user) return;
+
+  const { data, error } = await supabase
+    .from('messages')
+    .select('*')
+    .or(`sender_id.eq.${utilisateur.user.id},receiver_id.eq.${utilisateur.user.id}`)
+    .order('created_at', { ascending: true });
+
+  if (error) {
+    console.error(error);
+    return;
+  }
+
+  console.log('Messages ProxiGo :', data);
+}
+  
   </script>
   </body>
 </html>
