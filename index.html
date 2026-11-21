@@ -84,6 +84,61 @@
     boutonOubli.type = 'button';
     boutonOubli.textContent = 'Mot de passe oublié';
     connexion.append(boutonOubli);
+        const inscription = document.createElement('details');
+    inscription.innerHTML = `
+      <summary class="button">Créer un compte</summary>
+      <form class="service">
+        <p><label>Adresse e-mail<br>
+          <input name="email" type="email" autocomplete="email" required>
+        </label></p>
+        <p><label>Mot de passe<br>
+          <input name="password" type="password"
+            autocomplete="new-password" minlength="8" required>
+        </label></p>
+        <p><label>Type de compte<br>
+          <select name="account_type" required>
+            <option value="" disabled selected>Choisir un type de compte</option>
+            <option value="client">Client</option>
+            <option value="provider">Prestataire</option>
+          </select>
+        </label></p>
+        <button type="submit" class="button">M’inscrire</button>
+        <p role="status"></p>
+      </form>
+    `;
+    connexion.closest('details').before(inscription);
+
+    const formulaireInscription = inscription.querySelector('form');
+    const boutonInscription = formulaireInscription.querySelector('button');
+    const etatInscription = formulaireInscription.querySelector('[role="status"]');
+
+    formulaireInscription.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const champs = new FormData(formulaireInscription);
+      boutonInscription.disabled = true;
+      etatInscription.textContent = 'Inscription en cours…';
+
+      try {
+        const { data, error } = await proxiGo.auth.signUp({
+          email: champs.get('email').trim(),
+          password: champs.get('password'),
+          options: {
+            emailRedirectTo: 'https://havelange56.github.io/Proxigo/',
+            data: { account_type: champs.get('account_type') }
+          }
+        });
+        if (error) throw error;
+
+        formulaireInscription.reset();
+        etatInscription.textContent = data.session
+          ? 'Ton compte est créé et tu es connecté.'
+          : 'Si un e-mail de confirmation arrive, ouvre son lien pour activer ton compte.';
+      } catch {
+        etatInscription.textContent = 'Inscription impossible. Vérifie tes informations et réessaie.';
+      } finally {
+        boutonInscription.disabled = false;
+      }
+    });
         document.addEventListener('DOMContentLoaded', () => {
       const section = document.createElement('section');
       section.className = 'services';
