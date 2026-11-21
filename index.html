@@ -310,7 +310,7 @@
 
         try {
           const { data, error } = await proxiGo.from('service_offers')
-            .select('proposed_price,message,status,service_requests!inner(title,city)')
+            .select('offre_id:id::text,proposed_price,message,status,service_requests!inner(title,city)')
             .eq('service_requests.client_id', compte);
 
           if (chargement !== operation) return;
@@ -331,6 +331,52 @@
               ? statuts[offre.status]
               : offre.status;
             carte.append(titre, prix, texte, statut);
+
+            if (offre.status === 'pending') {
+              const actions = document.createElement('div');
+              const confirmation = document.createElement('p');
+              confirmation.setAttribute('role', 'status');
+              carte.append(actions, confirmation);
+
+              const choix = [
+                { libelle: 'Accepter', decision: 'accepted' },
+                { libelle: 'Refuser', decision: 'rejected' }
+              ];
+              for (const { libelle, decision } of choix) {
+                const action = document.createElement('button');
+                action.type = 'button';
+                action.className = 'button';
+                action.textContent = libelle;
+                actions.append(action);
+
+                action.addEventListener('click', async () => {
+                  if (!carte.isConnected || !compte || action.disabled) return;
+                  if (!window.confirm(libelle + ' cette offre de ' + prix.textContent + ' ?')) return;
+
+                  for (const controle of actions.children) controle.disabled = true;
+                  confirmation.textContent = 'Enregistrement…';
+                  try {
+                    const { data: enregistree, error } = await proxiGo.rpc('repondre_offre', {
+                      p_offre_id: offre.offre_id,
+                      p_decision: decision
+                    });
+                    if (!carte.isConnected) return;
+                    if (error) throw error;
+                    if (!enregistree) {
+                      confirmation.textContent = 'Cette offre ne peut plus être modifiée. Appuie sur « Afficher mes offres » pour actualiser.';
+                      return;
+                    }
+                    statut.textContent = statuts[decision];
+                    actions.remove();
+                    confirmation.textContent = 'Offre ' + statuts[decision].toLowerCase() + '.';
+                  } catch {
+                    if (!carte.isConnected) return;
+                    confirmation.textContent = 'Impossible de confirmer la réponse. Réessaie ou actualise tes offres.';
+                    for (const controle of actions.children) controle.disabled = false;
+                  }
+                });
+              }
+            }
             return carte;
           });
 
