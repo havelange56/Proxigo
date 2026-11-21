@@ -316,9 +316,7 @@
         try {
           const requete = proxiGo.from('service_offers');
           const { data, error } = offresEnvoyees
-            ? await requete
-              .select('proposed_price,message,status,service_requests(title,city)')
-              .eq('provider_id', compte)
+            ? await proxiGo.rpc('lister_mes_offres_envoyees')
             : await requete
               .select('offre_id:id::text,proposed_price,message,status,service_requests!inner(title,city)')
               .eq('service_requests.client_id', compte);
