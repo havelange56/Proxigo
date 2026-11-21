@@ -1263,6 +1263,11 @@ async function afficherMessages() {
   console.log('Messages ProxiGo :', data);
 }
     
+window.ouvrirMessagerie = async function () {
+  await afficherMessages();
+  alert("Messagerie ProxiGo : vérification effectuée.");
+};
+
   </script>
   </body>
 </html>
