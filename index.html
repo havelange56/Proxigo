@@ -1221,6 +1221,25 @@
   }
 
   afficherCategories();
-</script>
+
+async function envoyerMessage(destinataire, contenu) {
+  const utilisateur = await supabase.auth.getUser();
+  if (!utilisateur.data.user) {
+    alert("Connectez-vous d'abord.");
+    return;
+  }
+
+  const { error } = await supabase
+    .from('messages')
+    .insert({
+      sender_id: utilisateur.data.user.id,
+      receiver_id: destinataire,
+      content: contenu
+    });
+
+  if (error) alert(error.message);
+}
+
+  </script>
   </body>
 </html>
