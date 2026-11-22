@@ -37,6 +37,8 @@
       max-width: 650px;
       margin: 35px auto;
     }
+    [hidden] { display:none !important; }
+    input, textarea, select {max-width:100%;}
     .service {
       background: white;
       padding: 22px;
@@ -80,6 +82,7 @@
       'https://xxqobojmdmxihpwcjnkw.supabase.co',
       'sb_publishable_wNCVHsFVdqp_q66rr3V1IQ_vH8o58kC'
     );
+    window.proxiGoClient = proxiGo;
     const boutonOubli = document.createElement('button');
     boutonOubli.type = 'button';
     boutonOubli.textContent = 'Mot de passe oublié';
@@ -373,7 +376,7 @@
           const { data, error } = offresEnvoyees
             ? await proxiGo.rpc('lister_mes_offres_envoyees')
             : await requete
-              .select('offre_id:id::text,proposed_price,message,status,service_requests!inner(title,city)')
+              .select('id,proposed_price,message,status,service_requests!inner(title,city)')
               .eq('service_requests.client_id', compte);
 
           if (chargement !== operation) return;
@@ -422,7 +425,7 @@
                   confirmation.textContent = 'Enregistrement…';
                   try {
                     const { data: enregistree, error } = await proxiGo.rpc('repondre_offre', {
-                      p_offre_id: offre.offre_id,
+                      p_offre_id: String(offre.id),
                       p_decision: decision
                     });
                     if (!carte.isConnected) return;
@@ -615,6 +618,18 @@
       <p role="status"></p>
       <div></div>
     </section>
+    <section id="messagerie" class="service" hidden style="max-width:650px;margin:25px auto;text-align:left">
+      <h2>💬 Messagerie ProxiGo</h2>
+      <p>Pour écrire à quelqu’un, indique son identifiant de compte. La messagerie nécessite une table « messages » autorisée dans Supabase.</p>
+      <button id="voir-messages" type="button" class="button">Afficher mes messages</button>
+      <p id="etat-messages" role="status"></p>
+      <div id="liste-messages"></div>
+      <form id="formulaire-message">
+        <p><label>Identifiant du destinataire<br><input name="receiver_id" type="text" required placeholder="Identifiant du compte"></label></p>
+        <p><label>Message<br><textarea name="content" rows="3" required></textarea></label></p>
+        <button class="button" type="submit">Envoyer le message</button>
+      </form>
+    </section>
   </main>
   <script>
   async function afficherCategories() {
@@ -646,628 +661,63 @@
 
   afficherCategories();
 </script>
-  </body>
-</html>
-
-<html lang="fr">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>ProxiGo - Services près de chez vous</title>
-  <style>
-    * { box-sizing: border-box; }
-    body {
-      margin: 0;
-      font-family: Arial, sans-serif;
-      background: #f5f8ff;
-      color: #172b4d;
-    }
-    header {
-      background: #1769e0;
-      color: white;
-      padding: 24px;
-      text-align: center;
-    }
-    header h1 { margin: 0; font-size: 36px; }
-    main { padding: 45px 20px; text-align: center; }
-    h2 { font-size: 28px; }
-    p { line-height: 1.6; }
-    .button {
-      display: inline-block;
-      background: #1769e0;
-      color: white;
-      padding: 15px 22px;
-      border-radius: 10px;
-      text-decoration: none;
-      margin: 8px;
-    }
-    .services {
-      display: grid;
-      gap: 15px;
-      max-width: 650px;
-      margin: 35px auto;
-    }
-    .service {
-      background: white;
-      padding: 22px;
-      border-radius: 12px;
-      box-shadow: 0 3px 12px #00000010;
-    }
-  </style>
-</head>
-<body>
-  <header>
-    <h1>ProxiGo</h1>
-    <p>Vos services de proximité, simplement.</p>
-  </header>
-  <div style="text-align:center; margin:20px;">
-  <button onclick="ouvrirMessagerie()">
-    💬 Messagerie
-  </button>
-</div>
-  <main>
-    <h2>Besoin d'un coup de main ?</h2>
-    <p>Trouvez des prestataires près de chez vous.</p>
-    <a class="button" href="#services">Découvrir les services</a>
-    <details>
-  <summary class="button">Publier une demande</summary>
-  <form id="connexion-client" class="service" onsubmit="return false">
-  <p><label>Adresse e-mail<br>
-    <input name="email" type="email" autocomplete="username" required>
-  </label></p>
-  <p><label>Mot de passe<br>
-    <input name="password" type="password" autocomplete="current-password" required>
-  </label></p>
-  <button type="submit" disabled>Se connecter</button>
-</form>
-<button id="deconnexion-client" type="button" hidden>Se déconnecter</button>
-<p id="etat-connexion" role="status"></p>
-
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
-  const connexion = document.getElementById('connexion-client');
-  const boutonConnexion = connexion.querySelector('button');
-  const deconnexion = document.getElementById('deconnexion-client');
-  const etatConnexion = document.getElementById('etat-connexion');
-
-  if (window.supabase) {
-    const proxiGo = window.supabase.createClient(
-      'https://xxqobojmdmxihpwcjnkw.supabase.co',
-      'sb_publishable_wNCVHsFVdqp_q66rr3V1IQ_vH8o58kC'
-    );
-    const boutonOubli = document.createElement('button');
-    boutonOubli.type = 'button';
-    boutonOubli.textContent = 'Mot de passe oublié';
-    connexion.append(boutonOubli);
-        document.addEventListener('DOMContentLoaded', () => {
-      const section = document.createElement('section');
-      section.className = 'services';
-      section.hidden = true;
-      section.innerHTML = `
-        <h2>Demandes ouvertes</h2>
-        <button type="button">Afficher les demandes</button>
-        <p role="status"></p>
-        <div></div>
-      `;
-      document.getElementById('services').after(section);
-
-      const bouton = section.querySelector('button');
-      const message = section.querySelector('[role="status"]');
-      const liste = section.querySelector('div');
-      let compteConnecte = null;
-
-      proxiGo.auth.onAuthStateChange((_evenement, session) => {
-        const compte = session?.user?.id ?? null;
-        if (compte !== compteConnecte) {
-          liste.replaceChildren();
-          message.textContent = '';
-        }
-        compteConnecte = compte;
-        section.hidden = !compte;
-        section.style.display = compte ? '' : 'none';
-      });
-
-      bouton.addEventListener('click', async () => {
-        const compte = compteConnecte;
-        if (!compte) return;
-
-        bouton.disabled = true;
-        message.textContent = 'Chargement des demandes…';
-
-        try {
-          const { data, error } = await proxiGo.from('service_requests')
-            .select('id,title,city,description')
-            .eq('status', 'open')
-            .order('created_at', { ascending: false })
-            .limit(20);
-
-          if (compte !== compteConnecte) return;
-          if (error) throw error;
-
-                    const cartes = data.map(({ id, title, city, description }) => {
-            const carte = document.createElement('article');
-            carte.className = 'service';
-            const titre = document.createElement('h3');
-            const lieu = document.createElement('p');
-            const texte = document.createElement('p');
-            titre.textContent = title;
-            lieu.textContent = city;
-            texte.textContent = description;
-            carte.append(titre, lieu, texte);
-                        const reponse = document.createElement('details');
-            reponse.innerHTML = `
-              <summary>Répondre à cette demande</summary>
-              <form>
-                <p><label>Prix proposé en euros<br>
-                  <input name="prix" type="number" min="0.01" step="0.01"
-                    inputmode="decimal" required>
-                </label></p>
-                <p><label>Ton message<br>
-                  <textarea name="message" rows="3" required></textarea>
-                </label></p>
-                <button type="submit">Envoyer mon offre</button>
-                <p role="status"></p>
-              </form>
-            `;
-            carte.append(reponse);
-
-            const offre = reponse.querySelector('form');
-            const envoyerOffre = offre.querySelector('button');
-            const etatOffre = offre.querySelector('[role="status"]');
-
-            offre.addEventListener('submit', async (evenement) => {
-              evenement.preventDefault();
-              if (envoyerOffre.disabled || compte !== compteConnecte) return;
-
-              const champs = new FormData(offre);
-              const texteOffre = champs.get('message').trim();
-              if (!texteOffre) {
-                etatOffre.textContent = 'Écris un message avant d’envoyer.';
-                return;
-              }
-
-              envoyerOffre.disabled = true;
-              etatOffre.textContent = 'Envoi en cours…';
-
-              try {
-                const { error } = await proxiGo.from('service_offers').insert({
-                  request_id: id,
-                  provider_id: compte,
-                  proposed_price: champs.get('prix'),
-                  message: texteOffre,
-                  status: 'pending'
-                });
-
-                if (error) throw error;
-                offre.reset();
-                etatOffre.textContent = 'Ton offre a bien été envoyée.';
-              } catch (erreur) {
-                envoyerOffre.disabled = false;
-                etatOffre.textContent = erreur.code === '42501'
-                  ? 'Seul un compte prestataire peut répondre à une demande ouverte.'
-                  : 'L’envoi de ton offre n’a pas pu être confirmé.';
-              }
-            });
-                      return carte;
-          });
-
-          liste.replaceChildren(...cartes);
-          message.textContent = cartes.length ? '' : 'Aucune demande ouverte pour le moment.';
-        } catch {
-          if (compte === compteConnecte) {
-            message.textContent = 'Impossible de charger les demandes. Réessaie.';
-          }
-        } finally {
-          bouton.disabled = false;
-        }
-      });
-    });
-    document.addEventListener('DOMContentLoaded', () => {
-      const categorie = document.querySelector('select[name="category_id"]');
-      const demande = categorie.form;
-      const message = demande.lastElementChild;
-      const envoyer = document.createElement('button');
-
-      envoyer.type = 'submit';
-      envoyer.textContent = 'Envoyer la demande';
-      envoyer.disabled = true;
-      message.before(envoyer);
-      message.setAttribute('role', 'status');
-      message.textContent = 'Connecte-toi pour envoyer une demande.';
-
-      let connecte = false;
-      let enCours = false;
-
-      proxiGo.auth.onAuthStateChange((_evenement, session) => {
-        connecte = Boolean(session);
-        envoyer.disabled = !connecte || enCours;
-        if (!enCours) {
-          message.textContent = connecte ? '' : 'Connecte-toi pour envoyer une demande.';
-        }
-      });
-
-      demande.addEventListener('submit', async (evenement) => {
-        evenement.preventDefault();
-        if (!connecte || enCours) return;
-
-        const champs = new FormData(demande);
-        const titre = champs.get('title').trim();
-        const ville = champs.get('city').trim();
-        const description = champs.get('description').trim();
-
-        if (!titre || !ville || !description) {
-          message.textContent = 'Complète le titre, la ville et la description.';
-          return;
-        }
-
-        enCours = true;
-        envoyer.disabled = true;
-        message.textContent = 'Envoi en cours…';
-
-        try {
-          const { data, error: erreurConnexion } = await proxiGo.auth.getUser();
-          if (erreurConnexion || !data.user) {
-            message.textContent = 'Reconnecte-toi, puis réessaie.';
-            return;
-          }
-
-          const { error } = await proxiGo.from('service_requests').insert({
-            client_id: data.user.id,
-            category_id: Number(categorie.value),
-            title: titre,
-            city: ville,
-            description
-          });
-
-          if (error) throw error;
-          demande.reset();
-          message.textContent = 'Ta demande a bien été publiée.';
-        } catch (erreur) {
-          message.textContent = erreur.code === '42501'
-            ? 'Connecte-toi avec un compte client pour publier une demande.'
-            : 'La publication n’a pas pu être confirmée.';
-        } finally {
-          enCours = false;
-          envoyer.disabled = !connecte;
-        }
-      });
-    });
-    document.addEventListener('DOMContentLoaded', () => {
-      const section = document.getElementById('offres-recues');
-      const bouton = section.querySelector('button');
-      const message = section.querySelector('[role="status"]');
-      const liste = section.querySelector('div');
-      const euros = new Intl.NumberFormat('fr-BE', { style: 'currency', currency: 'EUR' });
-      const statuts = { pending: 'En attente', accepted: 'Acceptée', rejected: 'Refusée' };
-      let compte = null;
-      let chargement = null;
-
-      proxiGo.auth.onAuthStateChange((_evenement, session) => {
-        const nouveauCompte = session?.user?.id ?? null;
-        if (nouveauCompte !== compte) {
-          compte = nouveauCompte;
-          chargement = null;
-          bouton.disabled = false;
-          liste.replaceChildren();
-          message.textContent = '';
-        }
-        section.hidden = !compte;
-      });
-
-      bouton.addEventListener('click', async () => {
-        if (!compte || chargement) return;
-
-        const operation = {};
-        chargement = operation;
-        bouton.disabled = true;
-        liste.replaceChildren();
-        message.textContent = 'Chargement des offres…';
-
-        try {
-          const { data, error } = await proxiGo.from('service_offers')
-            .select('offre_id:id::text,proposed_price,message,status,service_requests!inner(title,city)')
-            .eq('service_requests.client_id', compte);
-
-          if (chargement !== operation) return;
-          if (error) throw error;
-
-          const cartes = data.map((offre) => {
-            const carte = document.createElement('article');
-            carte.className = 'service';
-            const titre = document.createElement('h3');
-            const prix = document.createElement('p');
-            const texte = document.createElement('p');
-            const statut = document.createElement('p');
-            const demande = offre.service_requests;
-            titre.textContent = [demande.title, demande.city].filter(Boolean).join(' – ');
-            prix.textContent = euros.format(Number(offre.proposed_price));
-            texte.textContent = offre.message;
-            statut.textContent = Object.hasOwn(statuts, offre.status)
-              ? statuts[offre.status]
-              : offre.status;
-            carte.append(titre, prix, texte, statut);
-
-            if (offre.status === 'pending') {
-              const actions = document.createElement('div');
-              const confirmation = document.createElement('p');
-              confirmation.setAttribute('role', 'status');
-              carte.append(actions, confirmation);
-
-              const choix = [
-                { libelle: 'Accepter', decision: 'accepted' },
-                { libelle: 'Refuser', decision: 'rejected' }
-              ];
-              for (const { libelle, decision } of choix) {
-                const action = document.createElement('button');
-                action.type = 'button';
-                action.className = 'button';
-                action.textContent = libelle;
-                actions.append(action);
-
-                action.addEventListener('click', async () => {
-                  if (!carte.isConnected || !compte || action.disabled) return;
-                  if (!window.confirm(libelle + ' cette offre de ' + prix.textContent + ' ?')) return;
-
-                  for (const controle of actions.children) controle.disabled = true;
-                  confirmation.textContent = 'Enregistrement…';
-                  try {
-                    const { data: enregistree, error } = await proxiGo.rpc('repondre_offre', {
-                      p_offre_id: offre.offre_id,
-                      p_decision: decision
-                    });
-                    if (!carte.isConnected) return;
-                    if (error) throw error;
-                    if (!enregistree) {
-                      confirmation.textContent = 'Cette offre ne peut plus être modifiée. Appuie sur « Afficher mes offres » pour actualiser.';
-                      return;
-                    }
-                    statut.textContent = statuts[decision];
-                    actions.remove();
-                    confirmation.textContent = 'Offre ' + statuts[decision].toLowerCase() + '.';
-                  } catch {
-                    if (!carte.isConnected) return;
-                    confirmation.textContent = 'Impossible de confirmer la réponse. Réessaie ou actualise tes offres.';
-                    for (const controle of actions.children) controle.disabled = false;
-                  }
-                });
-              }
-            }
-            return carte;
-          });
-
-          liste.replaceChildren(...cartes);
-          message.textContent = cartes.length ? '' : 'Tu n’as encore reçu aucune offre.';
-        } catch {
-          if (chargement === operation) {
-            message.textContent = 'Impossible de charger tes offres. Réessaie.';
-          }
-        } finally {
-          if (chargement === operation) {
-            chargement = null;
-            bouton.disabled = false;
-          }
-        }
-      });
-    });
-    const formulaireNouveauMotDePasse = document.createElement('form');
-    formulaireNouveauMotDePasse.className = 'service';
-    formulaireNouveauMotDePasse.hidden = true;
-    formulaireNouveauMotDePasse.innerHTML = `
-      <p><label>Nouveau mot de passe<br>
-        <input name="nouveau" type="password" autocomplete="new-password"
-          minlength="8" required>
-      </label></p>
-      <button type="submit">Enregistrer le nouveau mot de passe</button>
-      <p role="status"></p>
-    `;
-    etatConnexion.after(formulaireNouveauMotDePasse);
-
-    boutonOubli.addEventListener('click', async () => {
-      const email = connexion.elements.namedItem('email');
-      if (!email.reportValidity()) return;
-
-      boutonOubli.disabled = true;
-      etatConnexion.textContent = 'Envoi en cours…';
-      try {
-        const { error } = await proxiGo.auth.resetPasswordForEmail(
-          email.value.trim(),
-          { redirectTo: 'https://havelange56.github.io/Proxigo/' }
-        );
-        if (error) throw error;
-        etatConnexion.textContent =
-          'Si cette adresse est associée à un compte, tu recevras un lien par e-mail.';
-      } catch {
-        etatConnexion.textContent = 'Envoi impossible. Réessaie dans un moment.';
-      } finally {
-        boutonOubli.disabled = false;
-      }
-    });
-
-    proxiGo.auth.onAuthStateChange((evenement, session) => {
-      if (evenement === 'PASSWORD_RECOVERY' && session) {
-        formulaireNouveauMotDePasse.hidden = false;
-        connexion.closest('details').open = true;
-      }
-      if (evenement === 'SIGNED_OUT') {
-        formulaireNouveauMotDePasse.hidden = true;
-        formulaireNouveauMotDePasse.reset();
-      }
-    });
-
-    formulaireNouveauMotDePasse.addEventListener('submit', async (evenement) => {
-      evenement.preventDefault();
-      const bouton = formulaireNouveauMotDePasse.querySelector('button');
-      const message = formulaireNouveauMotDePasse.querySelector('[role="status"]');
-      const nouveau = formulaireNouveauMotDePasse.elements.namedItem('nouveau');
-      bouton.disabled = true;
-      message.textContent = 'Enregistrement en cours…';
-
-      try {
-        const { error } = await proxiGo.auth.updateUser({ password: nouveau.value });
-        if (error) throw error;
-        formulaireNouveauMotDePasse.reset();
-        formulaireNouveauMotDePasse.hidden = true;
-        etatConnexion.textContent = 'Ton mot de passe a été changé. Tu es connecté.';
-      } catch {
-        message.textContent =
-          'Impossible de changer le mot de passe. Réessaie ou demande un nouveau lien.';
-      } finally {
-        bouton.disabled = false;
-      }
-    });
-    proxiGo.auth.onAuthStateChange((_evenement, session) => {
-      connexion.hidden = Boolean(session);
-      deconnexion.hidden = !session;
-      etatConnexion.textContent = session ? 'Tu es connecté.' : '';
-      boutonConnexion.disabled = false;
-    });
-
-    connexion.addEventListener('submit', async (evenement) => {
-      evenement.preventDefault();
-      boutonConnexion.disabled = true;
-      etatConnexion.textContent = 'Connexion en cours…';
-      const champs = new FormData(connexion);
-
-      try {
-        const { error } = await proxiGo.auth.signInWithPassword({
-          email: champs.get('email').trim(),
-          password: champs.get('password')
-        });
-        if (error) throw error;
-        connexion.reset();
-      } catch {
-        etatConnexion.textContent = 'Connexion impossible. Vérifie tes identifiants et réessaie.';
-      } finally {
-        boutonConnexion.disabled = false;
-      }
-    });
-
-    deconnexion.addEventListener('click', async () => {
-      const { error } = await proxiGo.auth.signOut({ scope: 'local' });
-      if (error) etatConnexion.textContent = 'Déconnexion impossible. Réessaie.';
-    });
-  } else {
-    etatConnexion.textContent = 'Connexion indisponible. Recharge la page.';
+(() => {
+  const section = document.getElementById('messagerie');
+  const bouton = document.getElementById('voir-messages');
+  const etat = document.getElementById('etat-messages');
+  const liste = document.getElementById('liste-messages');
+  const formulaire = document.getElementById('formulaire-message');
+  if (!window.supabase) return;
+  const client = window.proxiGoClient;
+  if (!client) return;
+  async function utilisateur() {
+    const {data, error} = await client.auth.getUser();
+    if (error) return null;
+    return data.user;
   }
-</script>
-      <form class="service" onsubmit="return false">
-  <p><label>Titre de la demande<br>
-    <input name="title" type="text" required>
-  </label></p>
-  <p><label>Ville<br>
-    <input name="city" type="text" required>
-  </label></p>
-  <p><label>Décris le service dont tu as besoin<br>
-    <textarea name="description" rows="4" required></textarea>
-  </label></p>
-  <p><label>Catégorie<br>
-  <select name="category_id" required>
-    <option value="" selected disabled>Choisis une catégorie</option>
-    <option value="13">Aide à domicile</option>
-    <option value="6">Animaux</option>
-    <option value="3">Bricolage</option>
-    <option value="12">Cours particuliers</option>
-    <option value="4">Déménagement</option>
-    <option value="9">Électricité</option>
-    <option value="5">Garde d’enfants</option>
-    <option value="10">Informatique</option>
-    <option value="2">Jardinage</option>
-    <option value="1">Ménage</option>
-    <option value="14">Montage de meubles</option>
-    <option value="7">Peinture</option>
-    <option value="8">Plomberie</option>
-    <option value="11">Transport</option>
-  </select>
-</label></p>
-<p>Connecte-toi pour envoyer une demande.</p>
-</form>
-</details>
-    <section id="services" class="services">
-      <div class="service">🔧 Bricolage</div>
-      <div class="service">🧹 Nettoyage</div>
-      <div class="service">🌳 Jardinage</div>
-      <div class="service">🚚 Déménagement</div>
-      <div class="service">🐾 Services aux animaux</div>
-    </section>
-    
-    <section id="offres-recues" hidden>
-      <h2>Mes offres reçues</h2>
-      <button type="button" class="button">Afficher mes offres</button>
-      <p role="status"></p>
-      <div></div>
-    </section>
-  </main>
-  <script>
-  async function afficherCategories() {
-    const liste = document.getElementById('services');
-    const url = 'https://xxqobojmdmxihpwcjnkw.supabase.co/rest/v1/categories?select=name_fr&order=name_fr.asc';
-
+  client.auth.onAuthStateChange((_event, session) => { section.hidden = !session; });
+  bouton.addEventListener('click', async () => {
+    bouton.disabled = true;
+    etat.textContent = 'Chargement…';
     try {
-      const reponse = await fetch(url, {
-        headers: { apikey: 'sb_publishable_wNCVHsFVdqp_q66rr3V1IQ_vH8o58kC' }
+      const user = await utilisateur();
+      if (!user) throw new Error('Connecte-toi d’abord.');
+      const {data, error} = await client.from('messages')
+        .select('sender_id,receiver_id,content,created_at')
+        .or(`sender_id.eq.${user.id},receiver_id.eq.${user.id}`)
+        .order('created_at', {ascending:false}).limit(50);
+      if (error) throw error;
+      liste.replaceChildren();
+      for (const message of data) {
+        const p = document.createElement('p');
+        p.textContent = `${message.sender_id === user.id ? 'Envoyé' : 'Reçu'} : ${message.content}`;
+        liste.append(p);
+      }
+      etat.textContent = data.length ? '' : 'Aucun message pour le moment.';
+    } catch (e) { etat.textContent = 'Impossible de charger les messages : ' + e.message; }
+    finally { bouton.disabled = false; }
+  });
+  formulaire.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const button = formulaire.querySelector('button');
+    button.disabled = true;
+    try {
+      const user = await utilisateur();
+      if (!user) throw new Error('Connecte-toi d’abord.');
+      const valeurs = new FormData(formulaire);
+      const {error} = await client.from('messages').insert({
+        sender_id:user.id,
+        receiver_id:String(valeurs.get('receiver_id')).trim(),
+        content:String(valeurs.get('content')).trim()
       });
-
-      if (!reponse.ok) throw new Error('Chargement impossible');
-
-      const categories = await reponse.json();
-      if (categories.length === 0) return;
-
-      const cartes = categories.map(({ name_fr }) => {
-        const carte = document.createElement('div');
-        carte.className = 'service';
-        carte.textContent = name_fr;
-        return carte;
-      });
-
-      liste.replaceChildren(...cartes);
-    } catch (erreur) {
-      console.error('Catégories ProxiGo', erreur);
-    }
-  }
-
-  afficherCategories();
-
-async function envoyerMessage(destinataire, contenu) {
-  const utilisateur = await proxiGo.auth.getUser();
-  if (!utilisateur.data.user) {
-    alert("Connectez-vous d'abord.");
-    return;
-  }
-
-  const { error } = await proxiGo.
-    .from('messages')
-    .insert({
-      sender_id: utilisateur.data.user.id,
-      receiver_id: destinataire,
-      content: contenu
-    });
-
-  if (error) alert(error.message);
-}
-
-async function afficherMessages() {
-  const { data: utilisateur } = await proxiGo.auth.getUser();
-  if (!utilisateur.user) return;
-
-  const { data, error } = await proxiGo
-    .from('messages')
-    .select('*')
-    .or(`sender_id.eq.${utilisateur.user.id},receiver_id.eq.${utilisateur.user.id}`)
-    .order('created_at', { ascending: true });
-
-  if (error) {
-    console.error(error);
-    return;
-  }
-
-  console.log('Messages ProxiGo :', data);
-}
-    
-window.ouvrirMessagerie = async function () {
-  await afficherMessages();
-  alert("Messagerie ProxiGo : vérification effectuée.");
-};
-
-  </script>
+      if (error) throw error;
+      formulaire.reset();
+      etat.textContent = 'Message envoyé.';
+    } catch(e) {etat.textContent = 'Envoi impossible : ' + e.message;}
+    finally {button.disabled = false;}
+  });
+})();
+</script>
   </body>
 </html>
