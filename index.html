@@ -1228,13 +1228,13 @@
   afficherCategories();
 
 async function envoyerMessage(destinataire, contenu) {
-  const utilisateur = await supabase.auth.getUser();
+  const utilisateur = await proxiGo.auth.getUser();
   if (!utilisateur.data.user) {
     alert("Connectez-vous d'abord.");
     return;
   }
 
-  const { error } = await supabase
+  const { error } = await proxiGo.
     .from('messages')
     .insert({
       sender_id: utilisateur.data.user.id,
@@ -1246,10 +1246,10 @@ async function envoyerMessage(destinataire, contenu) {
 }
 
 async function afficherMessages() {
-  const { data: utilisateur } = await supabase.auth.getUser();
+  const { data: utilisateur } = await proxiGo.auth.getUser();
   if (!utilisateur.user) return;
 
-  const { data, error } = await supabase
+  const { data, error } = await proxiGo
     .from('messages')
     .select('*')
     .or(`sender_id.eq.${utilisateur.user.id},receiver_id.eq.${utilisateur.user.id}`)
