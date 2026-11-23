@@ -634,37 +634,94 @@
   <script>
   async function afficherCategories() {
     const liste = document.getElementById('services');
-    const url = 'https://xxqobojmdmxihpwcjnkw.supabase.co/rest/v1/categories?select=name_fr&order=name_fr.asc';
-
-    try {
-      const reponse = await fetch(url, {
-        headers: { apikey: 'sb_publishable_wNCVHsFVdqp_q66rr3V1IQ_vH8o58kC' }
-      });
-
-      if (!reponse.ok) throw new Error('Chargement impossible');
-
-      const categories = await reponse.json();
-      if (categories.length === 0) return;
-
-     const cartes = categories.map(({ id, name_fr }) => {
-        const carte = document.createElement('div');
-        carte.className = 'service';
-        carte.textContent = name_fr;
-       carte.addEventListener('click', () => {
-  carte.style.backgroundColor = '#dbeafe';
-  document.getElementById('demandes-categorie').textContent =
-    'Catégorie sélectionnée : ' + name_fr;
-});
-        return carte;
-      });
-
-      liste.replaceChildren(...cartes);
-    } catch (erreur) {
-      console.error('Catégories ProxiGo', erreur);
+    const demandesZone = document.getElementById('demandes-categorie');
+    const prestatairesZone = document.getElementById('prestataires-categorie');
+    const resultats = document.getElementById('resultats-categorie');
+    const client = window.proxiGoClient;
+    if (!client) {
+      liste.textContent = 'Connexion aux catégories indisponible. Actualise la page.';
+      return;
     }
-  }
 
-  afficherCategories();
+    const { data: categories, error } = await client.from('categories')
+      .select('id,name_fr').order('name_fr');
+    if (error || !categories) {
+      liste.textContent = 'Impossible de charger les catégories.';
+      return;
+    }
+
+    let selection = 0;
+    const cartes = categories.map(({ id, name_fr }) => {
+      const carte = document.createElement('button');
+      carte.type = 'button';
+      carte.className = 'service';
+      carte.textContent = name_fr;
+      carte.style.cssText = 'width:100%;border:0;text-align:center;cursor:pointer;color:inherit;font:inherit;';
+      carte.addEventListener('click', async () => {
+        const actuelle = ++selection;
+        for (const bouton of liste.querySelectorAll('button')) bouton.style.backgroundColor = 'white';
+        carte.style.backgroundColor = '#dbeafe';
+        resultats.querySelector('h2').textContent = 'Prestataires et demandes : ' + name_fr;
+        demandesZone.replaceChildren();
+        prestatairesZone.replaceChildren();
+        demandesZone.textContent = 'Chargement des demandes…';
+        prestatairesZone.textContent = 'Chargement des prestataires…';
+        resultats.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+        const [demandesResultat, servicesResultat] = await Promise.all([
+          client.from('service_requests')
+            .select('id,title,city,description,status')
+            .eq('category_id', id).eq('status', 'open').limit(30),
+          client.from('provider_services')
+            .select('id,title,city,description,hourly_rate')
+            .eq('category_id', id).eq('is_active', true).limit(30)
+        ]);
+        if (actuelle !== selection) return;
+
+        function afficher(zone, resultat, type) {
+          zone.replaceChildren();
+          if (resultat.error) {
+            zone.textContent = 'Impossible de charger les ' + type + '. Vérifie les autorisations de lecture dans Supabase.';
+            console.error('ProxiGo ' + type, resultat.error);
+            return;
+          }
+          const titre = document.createElement('h3');
+          titre.textContent = type === 'demandes' ? 'Demandes ouvertes' : 'Services des prestataires';
+          zone.append(titre);
+          if (!resultat.data.length) {
+            const vide = document.createElement('p');
+            vide.textContent = type === 'demandes'
+              ? 'Aucune demande ouverte dans cette catégorie pour le moment.'
+              : 'Aucun service de prestataire publié dans cette catégorie pour le moment.';
+            zone.append(vide);
+            return;
+          }
+          for (const item of resultat.data) {
+            const article = document.createElement('article');
+            article.className = 'service';
+            const nom = document.createElement('h4');
+            nom.textContent = item.title || 'Service';
+            const ville = document.createElement('p');
+            ville.textContent = item.city || '';
+            const description = document.createElement('p');
+            description.textContent = item.description || '';
+            article.append(nom, ville, description);
+            if (type === 'prestataires' && item.hourly_rate != null) {
+              const tarif = document.createElement('p');
+              tarif.textContent = Number(item.hourly_rate).toLocaleString('fr-BE', { style: 'currency', currency: 'EUR' }) + '/heure';
+              article.append(tarif);
+            }
+            zone.append(article);
+          }
+        }
+        afficher(demandesZone, demandesResultat, 'demandes');
+        afficher(prestatairesZone, servicesResultat, 'prestataires');
+      });
+      return carte;
+    });
+    liste.replaceChildren(...cartes);
+  }
+  afficherCategories().catch(erreur => console.error('Catégories ProxiGo', erreur));
 </script>
 <script>
 (() => {
@@ -731,45 +788,7 @@
   <div id="demandes-categorie"></div>
 </section>
 
-<script>
-document.querySelectorAll('#services .service, #categories button').forEach(carte => {
-  carte.style.cursor = 'pointer';
 
-  carte.addEventListener('click', async () => {
-    const categorie = carte.textContent.trim();
-    const zone = document.getElementById('resultats-categorie');
-    const demandes = document.getElementById('demandes-categorie');
-    const prestataires = document.getElementById('prestataires-categorie');
-
-    zone.scrollIntoView({ behavior: 'smooth' });
-    prestataires.textContent = '';
-    demandes.textContent = 'Chargement des demandes...';
-
-    try {
-      const url = 'https://xxqobojmdmxihpwcjnkw.supabase.co/rest/v1/categories?select=id,name_fr';
-      const reponse = await fetch(url, {
-        headers: {
-          apikey: 'sb_publishable_wNCVHsFVdqp_q66rr3V1IQ_vH8o58kC'
-        }
-      });
-
-      if (!reponse.ok) throw new Error('Chargement impossible');
-      const categories = await reponse.json();
-      const choix = categories.find(c => c.name_fr === categorie);
-
-      if (!choix) {
-        demandes.textContent = 'Catégorie introuvable.';
-        return;
-      }
-
-      demandes.textContent = 'Catégorie sélectionnée : ' + choix.name_fr;
-    } catch (erreur) {
-      demandes.textContent = 'Erreur de chargement.';
-      console.error(erreur);
-    }
-  });
-});
-</script>
 
   </body>
 </html>
