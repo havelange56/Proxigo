@@ -726,5 +726,45 @@
   <div id="demandes-categorie"></div>
 </section>
 
+<script>
+document.querySelectorAll('#services .service').forEach(carte => {
+  carte.style.cursor = 'pointer';
+
+  carte.addEventListener('click', async () => {
+    const categorie = carte.textContent.trim();
+    const zone = document.getElementById('resultats-categorie');
+    const demandes = document.getElementById('demandes-categorie');
+    const prestataires = document.getElementById('prestataires-categorie');
+
+    zone.scrollIntoView({ behavior: 'smooth' });
+    prestataires.textContent = '';
+    demandes.textContent = 'Chargement des demandes...';
+
+    try {
+      const url = 'https://xxqobojmdmxihpwcjnkw.supabase.co/rest/v1/categories?select=id,name_fr';
+      const reponse = await fetch(url, {
+        headers: {
+          apikey: 'sb_publishable_wNCVHsFVdqp_q66rr3V1IQ_vH8o58kC'
+        }
+      });
+
+      if (!reponse.ok) throw new Error('Chargement impossible');
+      const categories = await reponse.json();
+      const choix = categories.find(c => c.name_fr === categorie);
+
+      if (!choix) {
+        demandes.textContent = 'Catégorie introuvable.';
+        return;
+      }
+
+      demandes.textContent = 'Catégorie sélectionnée : ' + choix.name_fr;
+    } catch (erreur) {
+      demandes.textContent = 'Erreur de chargement.';
+      console.error(erreur);
+    }
+  });
+});
+</script>
+
   </body>
 </html>
