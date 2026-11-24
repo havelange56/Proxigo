@@ -1354,6 +1354,39 @@ document.addEventListener('DOMContentLoaded', () => {
   let compte = null;
   let role = null;
   let version = 0;
+  const pastille = document.createElement('span');
+  pastille.style.cssText = 'background:#b91c1c;color:white;border-radius:20px;padding:3px 9px;margin-left:8px;font-weight:bold;';
+  pastille.hidden = true;
+  pastille.setAttribute('aria-live', 'polite');
+  bouton.append(pastille);
+  let notificationTour = 0;
+  async function actualiserNotifications() {
+    if (!compte || section.hidden || document.hidden) return;
+    const utilisateur = compte, operation = version, tour = ++notificationTour;
+    const valide = () => operation === version && compte === utilisateur && tour === notificationTour;
+    const requete = () => client.from('direct_booking_messages')
+      .select('id', {count:'exact', head:true}).neq('sender_id', utilisateur).is('read_at', null);
+    try {
+      const resultat = await requete();
+      if (!valide()) return;
+      if (!resultat.error) {
+        pastille.textContent = String(resultat.count || 0);
+        pastille.hidden = !resultat.count;
+        pastille.setAttribute('aria-label', (resultat.count || 0) + ' messages non lus');
+      }
+      for (const badge of liste.querySelectorAll('[data-notification-booking]')) {
+        const r = await requete().eq('booking_id', badge.dataset.notificationBooking);
+        if (!valide()) return;
+        if (!r.error && badge.isConnected) {
+          badge.textContent = String(r.count || 0);
+          badge.hidden = !r.count;
+          badge.setAttribute('aria-label', (r.count || 0) + ' messages non lus');
+        }
+      }
+    } catch (e) { console.warn('Notifications ProxiGo', e); }
+  }
+  setInterval(actualiserNotifications, 10000);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) actualiserNotifications(); });
 
   const statuts = {
     pending: 'En attente',
@@ -1376,6 +1409,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const operation = ++version;
     compte = null;
     role = null;
+    pastille.hidden = true;
+    pastille.textContent = "";
     section.hidden = true;
     liste.replaceChildren();
     etat.textContent = '';
@@ -1412,6 +1447,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
       section.hidden = false;
       actualiserBoutons();
+      actualiserNotifications();
     }, 0);
   });
 
@@ -1480,6 +1516,12 @@ document.addEventListener('DOMContentLoaded', () => {
               <button class="button" type="submit">Envoyer</button>
               <p role="status"></p>
             </form>`;
+          const badge = document.createElement('span');
+          badge.dataset.notificationBooking = String(reservation.id);
+          badge.style.cssText = pastille.style.cssText;
+          badge.hidden = true;
+          badge.setAttribute('aria-live', 'polite');
+          bloc.querySelector('summary').append(badge);
           const historique = bloc.querySelector('.historique');
           const form = bloc.querySelector('form');
           const envoyer = form.querySelector('button');
@@ -1490,10 +1532,11 @@ document.addEventListener('DOMContentLoaded', () => {
           function arreter() { clearInterval(minuterie); minuterie = null; }
           async function actualiser() {
             if (!valide() || !bloc.open) { arreter(); return; }
+            if (document.hidden) return;
             const tour = ++lecture;
             try {
               const {data, error} = await client.from('direct_booking_messages')
-                .select('id,sender_id,content,created_at')
+                .select('id,sender_id,content,created_at,read_at')
                 .eq('booking_id', reservation.id).order('id', {ascending:false}).limit(100);
               if (!valide() || !bloc.open || tour !== lecture) return;
               if (error) throw error;
@@ -1505,6 +1548,12 @@ document.addEventListener('DOMContentLoaded', () => {
               });
               historique.replaceChildren(...lignes);
               if (!lignes.length) historique.textContent = 'Aucun message pour le moment.';
+              if (!document.hidden && data.some(m => m.sender_id !== utilisateur && !m.read_at)) {
+                const resultat = await client.rpc('marquer_messages_lus', {p_booking_id: reservation.id});
+                if (!valide() || !bloc.open || tour !== lecture) return;
+                if (resultat.error) console.warn('Lecture non enregistrée', resultat.error);
+                else actualiserNotifications();
+              }
             } catch (e) {
               if (valide() && tour === lecture) historique.textContent = 'Lecture impossible. Réessaie dans quelques secondes.';
             }
@@ -1537,6 +1586,7 @@ document.addEventListener('DOMContentLoaded', () => {
             } finally { envoyer.disabled = false; }
           };
           carte.append(bloc);
+          if (carte.isConnected) actualiserNotifications();
         }
         if (reservation.status === 'accepted') ajouterMessagerie();
 
@@ -1595,6 +1645,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         liste.append(carte);
       }
+      actualiserNotifications();
 
     } catch(e) {
       if (operation === version) {
