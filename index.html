@@ -792,5 +792,166 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
 
-  </body>
+ <script>
+(() => {
+  const client = window.proxiGoClient;
+  if (!client) return;
+
+  const ancien = document.getElementById('messagerie');
+  const section = ancien.cloneNode(false);
+  ancien.replaceWith(section);
+
+  section.innerHTML = `
+    <h2>💬 Messagerie ProxiGo</h2>
+    <button class="button" id="charger-conversations">
+      Afficher mes conversations
+    </button>
+    <p id="etat-conversations" role="status"></p>
+    <div id="conversations"></div>
+  `;
+
+  const liste = section.querySelector('#conversations');
+  const etat = section.querySelector('#etat-conversations');
+  const bouton = section.querySelector('#charger-conversations');
+  let compte = null;
+  let version = 0;
+
+  client.auth.onAuthStateChange((_event, session) => {
+    const nouveau = session?.user?.id ?? null;
+    if (nouveau !== compte) {
+      version++;
+      liste.replaceChildren();
+      etat.textContent = '';
+      bouton.disabled = false;
+    }
+    compte = nouveau;
+    section.hidden = !compte;
+  });
+
+  bouton.onclick = async () => {
+    if (!compte) return;
+    const user = compte;
+    const operation = ++version;
+    bouton.disabled = true;
+    liste.replaceChildren();
+    etat.textContent = 'Chargement…';
+
+    try {
+      const {data, error} = await client
+        .from('bookings')
+        .select('id,request_id,client_id,provider_id,status')
+        .or(`client_id.eq.${user},provider_id.eq.${user}`)
+        .in('status', ['confirmed', 'completed']);
+
+      if (error) throw error;
+      if (operation !== version) return;
+
+      etat.textContent = data.length
+        ? 'Choisis une conversation.'
+        : 'Aucune conversation disponible.';
+
+      for (const reservation of data) {
+        const destinataire = reservation.client_id === user
+          ? reservation.provider_id
+          : reservation.client_id;
+
+        const carte = document.createElement('article');
+        carte.className = 'service';
+
+        const titre = document.createElement('h3');
+        titre.textContent = 'Réservation n° ' + reservation.id;
+
+        const ouvrir = document.createElement('button');
+        ouvrir.className = 'button';
+        ouvrir.textContent = 'Envoyer un message';
+
+        const zone = document.createElement('div');
+        zone.hidden = true;
+
+        const historique = document.createElement('div');
+        const formulaire = document.createElement('form');
+
+        formulaire.innerHTML = `
+          <textarea name="content" rows="3"
+            placeholder="Écris ton message" required></textarea>
+          <button class="button" type="submit">Envoyer</button>
+          <p role="status"></p>
+        `;
+
+        const info = formulaire.querySelector('[role="status"]');
+        const envoyer = formulaire.querySelector('button');
+
+        async function actualiser() {
+          const {data, error} = await client.from('messages')
+            .select('sender_id,content,created_at')
+            .eq('request_id', reservation.request_id)
+            .order('created_at', {ascending: false})
+            .limit(50);
+
+          if (operation !== version) return;
+          if (error) {
+            info.textContent = 'Lecture impossible : ' + error.message;
+            return;
+          }
+
+          historique.replaceChildren();
+
+          for (const message of data.reverse()) {
+            const p = document.createElement('p');
+            p.textContent =
+              (message.sender_id === user ? 'Moi : ' : 'Reçu : ')
+              + message.content;
+            historique.append(p);
+          }
+        }
+
+        ouvrir.onclick = async () => {
+          zone.hidden = false;
+          await actualiser();
+        };
+
+        formulaire.onsubmit = async (event) => {
+          event.preventDefault();
+          if (compte !== user || operation !== version) return;
+
+          const contenu = formulaire.elements.content.value.trim();
+          if (!contenu) return;
+
+          envoyer.disabled = true;
+
+          try {
+            const {error} = await client.from('messages').insert({
+              request_id: reservation.request_id,
+              sender_id: user,
+              receiver_id: destinataire,
+              content: contenu
+            });
+
+            if (error) throw error;
+            if (operation !== version) return;
+
+            formulaire.reset();
+            info.textContent = 'Message envoyé.';
+            await actualiser();
+          } catch (e) {
+            info.textContent = 'Envoi impossible : ' + e.message;
+          } finally {
+            envoyer.disabled = false;
+          }
+        };
+
+        zone.append(historique, formulaire);
+        carte.append(titre, ouvrir, zone);
+        liste.append(carte);
+      }
+    } catch (e) {
+      if (operation === version) {
+        etat.textContent = 'Erreur : ' + e.message;
+      }
+    } finally {
+      if (operation === version) bouton.disabled = false;
+    }
+  };
+})();
+</script> </body>
 </html>
