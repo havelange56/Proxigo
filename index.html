@@ -673,7 +673,7 @@
             .select('id,title,city,description,status')
             .eq('category_id', id).eq('status', 'open').limit(30),
           client.from('provider_services')
-            .select('id,title,city,description,hourly_rate')
+            .select('id,provider_id,title,city,description,hourly_rate')
             .eq('category_id', id).eq('is_active', true).limit(30)
         ]);
         if (actuelle !== selection) return;
@@ -710,6 +710,35 @@
               const tarif = document.createElement('p');
               tarif.textContent = Number(item.hourly_rate).toLocaleString('fr-BE', { style: 'currency', currency: 'EUR' }) + '/heure';
               article.append(tarif);
+            }
+            if (type === 'prestataires') {
+              article.dataset.serviceId = String(item.id);
+              const note = document.createElement('p');
+              note.textContent = 'Chargement des notes…';
+              const avis = document.createElement('details');
+              avis.innerHTML = '<summary>Voir les avis du prestataire</summary><div></div>';
+              const contenu = avis.querySelector('div');
+              article.append(note, avis);
+              client.rpc('notes_prestataire', {p_prestataire_id:item.provider_id}).then(({data,error}) => {
+                const n = data?.[0];
+                note.textContent = error || !n ? 'Notes indisponibles' : Number(n.nombre_avis) ? '⭐ ' + Number(n.moyenne).toLocaleString('fr-BE',{minimumFractionDigits:1}) + '/5 (' + n.nombre_avis + ' avis)' : 'Aucun avis pour le moment';
+              }).catch(() => {note.textContent = 'Notes indisponibles';});
+              avis.addEventListener('toggle', async () => {
+                if (!avis.open) return;
+                contenu.textContent = 'Chargement…';
+                try {
+                  const {data,error} = await client.rpc('avis_prestataire',{p_prestataire_id:item.provider_id});
+                  if (error) throw error;
+                  contenu.replaceChildren();
+                  for (const r of data) {
+                    const p = document.createElement('p');
+                    p.style.cssText = 'white-space:pre-wrap;overflow-wrap:anywhere';
+                    p.textContent = '★'.repeat(r.note) + '☆'.repeat(5-r.note) + ' · ' + new Date(r.date_avis).toLocaleDateString('fr-BE') + '\n' + (r.commentaire || '');
+                    contenu.append(p);
+                  }
+                  if (!data.length) contenu.textContent = 'Aucun avis pour le moment.';
+                } catch {contenu.textContent = 'Avis indisponibles. Réessaie.';}
+              });
             }
             zone.append(article);
           }
@@ -1548,7 +1577,7 @@ document.addEventListener('DOMContentLoaded', () => {
               });
               historique.replaceChildren(...lignes);
               if (!lignes.length) historique.textContent = 'Aucun message pour le moment.';
-              if (!document.hidden && data.some(m => m.sender_id !== utilisateur && !m.read_at)) {
+              if (!document.hidden && historique.getBoundingClientRect().bottom > 0 && historique.getBoundingClientRect().top < window.innerHeight && data.some(m => m.sender_id !== utilisateur && !m.read_at)) {
                 const resultat = await client.rpc('marquer_messages_lus', {p_booking_id: reservation.id});
                 if (!valide() || !bloc.open || tour !== lecture) return;
                 if (resultat.error) console.warn('Lecture non enregistrée', resultat.error);
@@ -1588,7 +1617,56 @@ document.addEventListener('DOMContentLoaded', () => {
           carte.append(bloc);
           if (carte.isConnected) actualiserNotifications();
         }
-        if (reservation.status === 'accepted') ajouterMessagerie();
+        if (['accepted','completed'].includes(reservation.status)) ajouterMessagerie();
+
+        function ajouterAvis() {
+          if (carte.querySelector('.avis-direct')) return;
+          const form = document.createElement('form');
+          form.className = 'avis-direct';
+          form.innerHTML = `<h4>Noter la prestation</h4>
+            <p><label>Note <select name="note" required><option value="">Choisir</option><option value="1">★ 1/5</option><option value="2">★★ 2/5</option><option value="3">★★★ 3/5</option><option value="4">★★★★ 4/5</option><option value="5">★★★★★ 5/5</option></select></label></p>
+            <p><label>Commentaire public (facultatif)<br><textarea name="commentaire" maxlength="2000" rows="3"></textarea></label></p>
+            <p>Ne partage pas de coordonnées ou d’informations privées.</p>
+            <button class="button" type="submit">Publier mon avis</button><p role="status"></p>`;
+          const action = form.querySelector('button');
+          const info = form.querySelector('[role="status"]');
+          form.onsubmit = async event => {
+            event.preventDefault();
+            if (operation !== version || !carte.isConnected || action.disabled) return;
+            if (!confirm('Publier cet avis public ? Un seul avis est autorisé par réservation.')) return;
+            action.disabled = true;
+            try {
+              const {data,error} = await client.rpc('publier_avis_direct', {p_reservation_id:reservation.id,p_note:Number(form.elements.note.value),p_commentaire:form.elements.commentaire.value.trim() || null});
+              if (operation !== version || !carte.isConnected) return;
+              if (error) throw error;
+              if (!data) {info.textContent = 'Avis non publié : un avis existe peut-être déjà pour cette réservation.'; action.disabled = false; return;}
+              form.replaceChildren(info);
+              info.textContent = 'Merci ! Ton avis a été publié.';
+            } catch {info.textContent = 'Publication impossible. Réessaie.'; action.disabled = false;}
+          };
+          carte.append(form);
+        }
+        if (typeCompte === 'client' && reservation.status === 'completed') ajouterAvis();
+        if (typeCompte === 'client' && reservation.status === 'accepted') {
+          const terminer = document.createElement('button');
+          terminer.type = 'button'; terminer.className = 'button'; terminer.textContent = 'Terminer la prestation';
+          const info = document.createElement('p'); info.setAttribute('role','status');
+          terminer.onclick = async () => {
+            if (operation !== version || !carte.isConnected || terminer.disabled) return;
+            if (new Date(reservation.requested_date).getTime() > Date.now()) {info.textContent = 'Attends la date du rendez-vous.'; return;}
+            if (!confirm('Confirmes-tu que la prestation a réellement été terminée ?')) return;
+            terminer.disabled = true;
+            try {
+              const {data,error} = await client.rpc('terminer_reservation_directe',{p_reservation_id:reservation.id});
+              if (operation !== version || !carte.isConnected) return;
+              if (error) throw error;
+              if (!data) throw new Error('Non confirmé');
+              reservation.status = 'completed'; statut.textContent = statuts.completed;
+              terminer.remove(); info.textContent = 'Prestation terminée.'; ajouterAvis();
+            } catch {info.textContent = 'Impossible de terminer. Actualise tes réservations et réessaie.'; terminer.disabled = false;}
+          };
+          carte.append(terminer,info);
+        }
 
 
         if (typeCompte === 'provider' &&
@@ -1667,33 +1745,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (!articles.length) return;
 
-    const {data, error} = await client
-      .from('provider_services')
-      .select('id,title,city,description,hourly_rate')
-      .eq('is_active', true);
-
-    if (operation !== recherche || error || !data) return;
-
     for (const article of articles) {
-      if (!article.isConnected ||
-          article.querySelector('.reservation-directe')) continue;
-
-      const champs = article.querySelectorAll('p');
-      const nom = article.querySelector('h4')?.textContent;
-
-      const correspondances = data.filter(service =>
-        service.title === nom &&
-        (service.city || '') === champs[0]?.textContent &&
-        (service.description || '') === champs[1]?.textContent &&
-        service.hourly_rate != null &&
-        Number(service.hourly_rate).toLocaleString('fr-BE', {
-          style:'currency', currency:'EUR'
-        }) + '/heure' === champs[2]?.textContent
-      );
-
-      if (correspondances.length !== 1) continue;
-
-      const service = correspondances[0];
+      if (!article.isConnected || article.querySelector('.reservation-directe') || !article.dataset.serviceId) continue;
+      const service = {id: article.dataset.serviceId};
       const bloc = document.createElement('div');
       bloc.className = 'reservation-directe';
       bloc.hidden = role !== 'client';
@@ -1782,5 +1836,3 @@ document.addEventListener('DOMContentLoaded', () => {
 })();
 </script>
 </html>
-
-
