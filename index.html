@@ -1468,6 +1468,79 @@ document.addEventListener('DOMContentLoaded', () => {
 
         carte.append(nom, prix, date, texte, statut);
 
+        function ajouterMessagerie() {
+          if (carte.querySelector('.discussion-directe')) return;
+          const bloc = document.createElement('details');
+          bloc.className = 'discussion-directe';
+          bloc.innerHTML = `
+            <summary class="button">💬 Envoyer un message</summary>
+            <div class="historique" style="text-align:left;max-height:350px;overflow:auto;overflow-wrap:anywhere"></div>
+            <form>
+              <p><label>Ton message<br><textarea name="content" rows="3" maxlength="5000" required></textarea></label></p>
+              <button class="button" type="submit">Envoyer</button>
+              <p role="status"></p>
+            </form>`;
+          const historique = bloc.querySelector('.historique');
+          const form = bloc.querySelector('form');
+          const envoyer = form.querySelector('button');
+          const info = form.querySelector('[role="status"]');
+          let lecture = 0;
+          let minuterie = null;
+          const valide = () => operation === version && compte === utilisateur && carte.isConnected;
+          function arreter() { clearInterval(minuterie); minuterie = null; }
+          async function actualiser() {
+            if (!valide() || !bloc.open) { arreter(); return; }
+            const tour = ++lecture;
+            try {
+              const {data, error} = await client.from('direct_booking_messages')
+                .select('id,sender_id,content,created_at')
+                .eq('booking_id', reservation.id).order('id', {ascending:false}).limit(100);
+              if (!valide() || !bloc.open || tour !== lecture) return;
+              if (error) throw error;
+              const lignes = data.reverse().map(message => {
+                const p = document.createElement('p');
+                p.style.whiteSpace = 'pre-wrap';
+                p.textContent = (message.sender_id === utilisateur ? 'Moi' : 'Reçu') + ' · ' + new Date(message.created_at).toLocaleString('fr-BE') + '\n' + message.content;
+                return p;
+              });
+              historique.replaceChildren(...lignes);
+              if (!lignes.length) historique.textContent = 'Aucun message pour le moment.';
+            } catch (e) {
+              if (valide() && tour === lecture) historique.textContent = 'Lecture impossible. Réessaie dans quelques secondes.';
+            }
+          }
+          bloc.addEventListener('toggle', () => {
+            arreter();
+            if (bloc.open && valide()) {
+              actualiser();
+              minuterie = setInterval(actualiser, 5000);
+            } else { lecture++; historique.replaceChildren(); }
+          });
+          form.onsubmit = async event => {
+            event.preventDefault();
+            if (!valide() || envoyer.disabled) return;
+            const contenu = form.elements.content.value.trim();
+            if (!contenu) return;
+            envoyer.disabled = true;
+            info.textContent = 'Envoi en cours…';
+            try {
+              const {error} = await client.from('direct_booking_messages').insert({
+                booking_id: reservation.id, sender_id: utilisateur, content: contenu
+              });
+              if (!valide()) return;
+              if (error) throw error;
+              form.reset();
+              info.textContent = 'Message envoyé.';
+              await actualiser();
+            } catch (e) {
+              if (valide()) info.textContent = 'Envoi impossible. Vérifie la réservation et réessaie.';
+            } finally { envoyer.disabled = false; }
+          };
+          carte.append(bloc);
+        }
+        if (reservation.status === 'accepted') ajouterMessagerie();
+
+
         if (typeCompte === 'provider' &&
             reservation.status === 'pending') {
 
@@ -1504,6 +1577,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 statut.textContent = statuts[decision];
                 actions.remove();
                 info.textContent = 'Réponse enregistrée.';
+                 if (decision === 'accepted') ajouterMessagerie();
 
               } catch(e) {
                 if (operation !== version) return;
