@@ -1109,4 +1109,220 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 })();
 </script></body>
+
+<script>
+(() => {
+  const client = window.proxiGoClient;
+  if (!client) return;
+
+  const section = document.createElement('section');
+  section.className = 'service';
+  section.style.cssText = 'max-width:650px;margin:25px auto;';
+  section.hidden = true;
+
+  section.innerHTML = `
+    <h2>Mes services</h2>
+    <button class="button" type="button">
+      Afficher mes services
+    </button>
+    <p role="status"></p>
+    <div></div>
+  `;
+
+  document.getElementById('services').before(section);
+
+  const bouton = section.querySelector('button');
+  const etat = section.querySelector('[role="status"]');
+  const liste = section.querySelector('div');
+
+  let compte = null;
+  let version = 0;
+
+  client.auth.onAuthStateChange((_event, session) => {
+    const operation = ++version;
+    compte = null;
+    section.hidden = true;
+    liste.replaceChildren();
+    etat.textContent = '';
+    bouton.disabled = false;
+
+    if (!session) return;
+
+    setTimeout(async () => {
+      const {data, error} = await client.from('profiles')
+        .select('account_type')
+        .eq('id', session.user.id)
+        .single();
+
+      if (operation !== version) return;
+      if (error || data?.account_type !== 'provider') return;
+
+      compte = session.user.id;
+      section.hidden = false;
+    }, 0);
+  });
+
+  async function charger() {
+    if (!compte) return;
+
+    const utilisateur = compte;
+    const operation = version;
+
+    bouton.disabled = true;
+    etat.textContent = 'Chargement…';
+    liste.replaceChildren();
+
+    try {
+      const {data, error} = await client
+        .from('provider_services')
+        .select('id,title,description,city,hourly_rate,is_active')
+        .eq('provider_id', utilisateur);
+
+      if (operation !== version) return;
+      if (error) throw error;
+
+      etat.textContent = data.length
+        ? ''
+        : 'Tu n’as encore publié aucun service.';
+
+      for (const service of data) {
+        const carte = document.createElement('article');
+        carte.className = 'service';
+
+        carte.innerHTML = `
+          <h3></h3>
+          <p class="statut"></p>
+          <form>
+            <p><label>Titre<br>
+              <input name="title" required>
+            </label></p>
+            <p><label>Ville<br>
+              <input name="city" required>
+            </label></p>
+            <p><label>Description<br>
+              <textarea name="description" rows="4" required></textarea>
+            </label></p>
+            <p><label>Tarif horaire (€)<br>
+              <input name="hourly_rate" type="number"
+                min="0.01" step="0.01" required>
+            </label></p>
+            <button class="button" type="submit">
+              Enregistrer les modifications
+            </button>
+          </form>
+          <button class="button basculer" type="button"></button>
+          <button class="button supprimer" type="button"
+            style="background:#c62828">
+            Supprimer
+          </button>
+          <p role="status"></p>
+        `;
+
+        carte.querySelector('h3').textContent = service.title;
+
+        carte.querySelector('.statut').textContent =
+          service.is_active ? '🟢 Actif' : '⚪ Désactivé';
+
+        const formulaire = carte.querySelector('form');
+        const basculer = carte.querySelector('.basculer');
+        const supprimer = carte.querySelector('.supprimer');
+        const message = carte.querySelector('[role="status"]');
+
+        formulaire.elements.title.value = service.title;
+        formulaire.elements.city.value = service.city || '';
+        formulaire.elements.description.value = service.description || '';
+        formulaire.elements.hourly_rate.value = service.hourly_rate ?? '';
+
+        basculer.textContent = service.is_active
+          ? 'Désactiver'
+          : 'Réactiver';
+
+        async function modifier(valeurs, effacer = false) {
+          if (operation !== version || compte !== utilisateur) return;
+
+          const boutons = carte.querySelectorAll('button');
+          boutons.forEach(b => b.disabled = true);
+          bouton.disabled = true;
+          message.textContent = 'Enregistrement…';
+
+          try {
+            const table = client.from('provider_services');
+
+            const requete = effacer
+              ? table.delete()
+              : table.update(valeurs);
+
+            const {data, error} = await requete
+              .eq('id', service.id)
+              .eq('provider_id', utilisateur)
+              .select('id');
+
+            if (operation !== version) return;
+            if (error) throw error;
+            if (!data?.length) {
+              throw new Error('Modification non confirmée.');
+            }
+
+            await charger();
+
+          } catch (e) {
+            if (operation !== version) return;
+            message.textContent = 'Erreur : ' + e.message;
+          } finally {
+            if (operation === version) {
+              boutons.forEach(b => b.disabled = false);
+              bouton.disabled = false;
+            }
+          }
+        }
+
+        formulaire.onsubmit = async event => {
+          event.preventDefault();
+
+          const champs = new FormData(formulaire);
+          const titre = champs.get('title').trim();
+          const ville = champs.get('city').trim();
+          const description = champs.get('description').trim();
+          const tarif = Number(champs.get('hourly_rate'));
+
+          if (!titre || !ville || !description ||
+              !Number.isFinite(tarif) || tarif <= 0) {
+            message.textContent = 'Vérifie tous les champs.';
+            return;
+          }
+
+          await modifier({
+            title: titre,
+            city: ville,
+            description: description,
+            hourly_rate: tarif
+          });
+        };
+
+        basculer.onclick = () => {
+          modifier({is_active: !service.is_active});
+        };
+
+        supprimer.onclick = () => {
+          if (confirm('Supprimer définitivement ce service ?')) {
+            modifier(null, true);
+          }
+        };
+
+        liste.append(carte);
+      }
+
+    } catch (e) {
+      if (operation === version) {
+        etat.textContent = 'Erreur : ' + e.message;
+      }
+    } finally {
+      if (operation === version) bouton.disabled = false;
+    }
+  }
+
+  bouton.onclick = charger;
+})();
+</script>
 </html>
+
