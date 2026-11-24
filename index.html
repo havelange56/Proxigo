@@ -953,5 +953,160 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   };
 })();
-</script> </body>
+</script> <script>
+(() => {
+  const client = window.proxiGoClient;
+  if (!client) return;
+
+  const section = document.createElement('section');
+  section.className = 'service';
+  section.style.cssText = 'max-width:650px;margin:25px auto;';
+  section.hidden = true;
+
+  section.innerHTML = `
+    <details>
+      <summary class="button">Publier un service</summary>
+      <h2>Proposer mes services</h2>
+
+      <form>
+        <p><label>Titre du service<br>
+          <input name="title" required>
+        </label></p>
+
+        <p><label>Catégorie<br>
+          <select name="category_id" required>
+            <option value="">Choisir une catégorie</option>
+          </select>
+        </label></p>
+
+        <p><label>Ville<br>
+          <input name="city" required>
+        </label></p>
+
+        <p><label>Description<br>
+          <textarea name="description" rows="4" required></textarea>
+        </label></p>
+
+        <p><label>Tarif horaire en euros<br>
+          <input name="hourly_rate" type="number"
+            min="0.01" step="0.01" required>
+        </label></p>
+
+        <button class="button" type="submit" disabled>
+          Publier mon service
+        </button>
+
+        <p role="status"></p>
+      </form>
+    </details>
+  `;
+
+  document.getElementById('services').before(section);
+
+  const formulaire = section.querySelector('form');
+  const categories = formulaire.elements.category_id;
+  const bouton = formulaire.querySelector('button');
+  const etat = formulaire.querySelector('[role="status"]');
+
+  let compte = null;
+  let version = 0;
+
+  async function verifierCompte(id, operation) {
+    const {data, error} = await client.from('profiles')
+      .select('account_type')
+      .eq('id', id)
+      .single();
+
+    if (operation !== version) return;
+    if (error || data.account_type !== 'provider') return;
+
+    compte = id;
+    section.hidden = false;
+
+    const resultat = await client.from('categories')
+      .select('id,name_fr')
+      .order('name_fr');
+
+    if (operation !== version) return;
+
+    if (resultat.error) {
+      etat.textContent = 'Impossible de charger les catégories.';
+      return;
+    }
+
+    categories.replaceChildren(
+      new Option('Choisir une catégorie', '')
+    );
+
+    for (const categorie of resultat.data) {
+      categories.add(new Option(
+        categorie.name_fr, categorie.id
+      ));
+    }
+
+    bouton.disabled = false;
+  }
+
+  client.auth.onAuthStateChange((_event, session) => {
+    const operation = ++version;
+    compte = null;
+    section.hidden = true;
+    bouton.disabled = true;
+    formulaire.reset();
+    etat.textContent = '';
+
+    if (session) {
+      setTimeout(() => {
+        verifierCompte(session.user.id, operation);
+      }, 0);
+    }
+  });
+
+  formulaire.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    if (!compte || bouton.disabled) return;
+
+    const operation = version;
+    const valeurs = new FormData(formulaire);
+
+    const titre = valeurs.get('title').trim();
+    const ville = valeurs.get('city').trim();
+    const description = valeurs.get('description').trim();
+
+    if (!titre || !ville || !description) {
+      etat.textContent = 'Complète tous les champs.';
+      return;
+    }
+
+    bouton.disabled = true;
+    etat.textContent = 'Publication en cours…';
+
+    try {
+      const {error} = await client.from('provider_services')
+        .insert({
+          provider_id: compte,
+          category_id: Number(valeurs.get('category_id')),
+          title: titre,
+          city: ville,
+          description: description,
+          hourly_rate: Number(valeurs.get('hourly_rate')),
+          is_active: true
+        });
+
+      if (error) throw error;
+      if (operation !== version) return;
+
+      formulaire.reset();
+      etat.textContent = 'Ton service a bien été publié !';
+
+    } catch (e) {
+      if (operation === version) {
+        etat.textContent = 'Publication impossible : ' + e.message;
+      }
+    } finally {
+      if (operation === version) bouton.disabled = false;
+    }
+  });
+})();
+</script></body>
 </html>
