@@ -1324,5 +1324,338 @@ document.addEventListener('DOMContentLoaded', () => {
   bouton.onclick = charger;
 })();
 </script>
+
+<script>
+(() => {
+  const client = window.proxiGoClient;
+  if (!client) return;
+
+  const section = document.createElement('section');
+  section.className = 'service';
+  section.style.cssText = 'max-width:650px;margin:25px auto;text-align:center;';
+  section.hidden = true;
+
+  section.innerHTML = `
+    <h2></h2>
+    <button class="button" type="button">
+      Afficher mes réservations
+    </button>
+    <p role="status"></p>
+    <div></div>
+  `;
+
+  document.getElementById('services').before(section);
+
+  const titre = section.querySelector('h2');
+  const bouton = section.querySelector('button');
+  const etat = section.querySelector('[role="status"]');
+  const liste = section.querySelector('div');
+
+  let compte = null;
+  let role = null;
+  let version = 0;
+
+  const statuts = {
+    pending: 'En attente',
+    accepted: 'Acceptée',
+    rejected: 'Refusée',
+    completed: 'Terminée',
+    cancelled: 'Annulée'
+  };
+
+  const zone = document.getElementById('prestataires-categorie');
+
+  function actualiserBoutons() {
+    zone.querySelectorAll('.reservation-directe')
+      .forEach(element => {
+        element.hidden = role !== 'client';
+      });
+  }
+
+  client.auth.onAuthStateChange((_event, session) => {
+    const operation = ++version;
+    compte = null;
+    role = null;
+    section.hidden = true;
+    liste.replaceChildren();
+    etat.textContent = '';
+    bouton.disabled = false;
+
+    zone.querySelectorAll('.reservation-directe form')
+      .forEach(form => {
+        form.reset();
+        form.hidden = true;
+        form.querySelector('button').disabled = false;
+        form.querySelector('[role="status"]').textContent = '';
+      });
+
+    actualiserBoutons();
+
+    if (!session) return;
+
+    setTimeout(async () => {
+      const {data, error} = await client.from('profiles')
+        .select('account_type')
+        .eq('id', session.user.id)
+        .single();
+
+      if (operation !== version || error) return;
+
+      compte = session.user.id;
+      role = data.account_type;
+
+      if (!['client', 'provider'].includes(role)) return;
+
+      titre.textContent = role === 'provider'
+        ? 'Réservations reçues'
+        : 'Mes réservations';
+
+      section.hidden = false;
+      actualiserBoutons();
+    }, 0);
+  });
+
+  async function charger() {
+    if (!compte || bouton.disabled) return;
+
+    const operation = version;
+    const utilisateur = compte;
+    const typeCompte = role;
+
+    bouton.disabled = true;
+    liste.replaceChildren();
+    etat.textContent = 'Chargement…';
+
+    try {
+      const {data, error} = await client
+        .from('direct_bookings')
+        .select('id,service_title,hourly_rate,requested_date,message,status')
+        .eq(typeCompte === 'provider'
+          ? 'provider_id' : 'client_id', utilisateur)
+        .order('created_at', {ascending:false});
+
+      if (operation !== version) return;
+      if (error) throw error;
+
+      etat.textContent = data.length
+        ? ''
+        : 'Aucune réservation pour le moment.';
+
+      for (const reservation of data) {
+        const carte = document.createElement('article');
+        carte.className = 'service';
+
+        const nom = document.createElement('h3');
+        nom.textContent = reservation.service_title;
+
+        const prix = document.createElement('p');
+        prix.textContent = Number(reservation.hourly_rate)
+          .toLocaleString('fr-BE', {
+            style:'currency',
+            currency:'EUR'
+          }) + '/heure';
+
+        const date = document.createElement('p');
+        date.textContent = new Date(reservation.requested_date)
+          .toLocaleString('fr-BE');
+
+        const texte = document.createElement('p');
+        texte.textContent = reservation.message || '';
+
+        const statut = document.createElement('p');
+        statut.textContent = statuts[reservation.status]
+          || reservation.status;
+
+        carte.append(nom, prix, date, texte, statut);
+
+        if (typeCompte === 'provider' &&
+            reservation.status === 'pending') {
+
+          const actions = document.createElement('div');
+          const info = document.createElement('p');
+          info.setAttribute('role', 'status');
+
+          for (const decision of ['accepted', 'rejected']) {
+            const action = document.createElement('button');
+            action.className = 'button';
+            action.type = 'button';
+            action.textContent = decision === 'accepted'
+              ? 'Accepter' : 'Refuser';
+
+            action.onclick = async () => {
+              if (operation !== version || !carte.isConnected) return;
+              if (!confirm(action.textContent + ' cette réservation ?')) return;
+
+              actions.querySelectorAll('button')
+                .forEach(b => b.disabled = true);
+
+              try {
+                const {data, error} = await client.rpc(
+                  'repondre_reservation_directe', {
+                    p_reservation_id: reservation.id,
+                    p_decision: decision
+                  }
+                );
+
+                if (operation !== version) return;
+                if (error) throw error;
+                if (!data) throw new Error('Réponse non confirmée. Actualise la liste.');
+
+                statut.textContent = statuts[decision];
+                actions.remove();
+                info.textContent = 'Réponse enregistrée.';
+
+              } catch(e) {
+                if (operation !== version) return;
+                info.textContent = e.message;
+                actions.querySelectorAll('button')
+                  .forEach(b => b.disabled = false);
+              }
+            };
+
+            actions.append(action);
+          }
+
+          carte.append(actions, info);
+        }
+
+        liste.append(carte);
+      }
+
+    } catch(e) {
+      if (operation === version) {
+        etat.textContent = 'Erreur : ' + e.message;
+      }
+    } finally {
+      if (operation === version) bouton.disabled = false;
+    }
+  }
+
+  bouton.onclick = charger;
+
+  let recherche = 0;
+
+  async function ajouterReservations() {
+    const operation = ++recherche;
+
+    const articles = [...zone.querySelectorAll('article')];
+
+    if (!articles.length) return;
+
+    const {data, error} = await client
+      .from('provider_services')
+      .select('id,title,city,description,hourly_rate')
+      .eq('is_active', true);
+
+    if (operation !== recherche || error || !data) return;
+
+    for (const article of articles) {
+      if (!article.isConnected ||
+          article.querySelector('.reservation-directe')) continue;
+
+      const champs = article.querySelectorAll('p');
+      const nom = article.querySelector('h4')?.textContent;
+
+      const correspondances = data.filter(service =>
+        service.title === nom &&
+        (service.city || '') === champs[0]?.textContent &&
+        (service.description || '') === champs[1]?.textContent &&
+        service.hourly_rate != null &&
+        Number(service.hourly_rate).toLocaleString('fr-BE', {
+          style:'currency', currency:'EUR'
+        }) + '/heure' === champs[2]?.textContent
+      );
+
+      if (correspondances.length !== 1) continue;
+
+      const service = correspondances[0];
+      const bloc = document.createElement('div');
+      bloc.className = 'reservation-directe';
+      bloc.hidden = role !== 'client';
+
+      bloc.innerHTML = `
+        <button class="button" type="button">
+          Réserver ce service
+        </button>
+        <form hidden>
+          <p><label>Date et heure souhaitées<br>
+            <input name="date" type="datetime-local" required>
+          </label></p>
+          <p><label>Ton message<br>
+            <textarea name="message" rows="3"></textarea>
+          </label></p>
+          <p>Le prix total reste à convenir avec le prestataire.</p>
+          <button class="button" type="submit">
+            Envoyer ma réservation
+          </button>
+          <p role="status"></p>
+        </form>
+      `;
+
+      const formulaire = bloc.querySelector('form');
+      const envoyer = formulaire.querySelector('button');
+      const info = formulaire.querySelector('[role="status"]');
+
+      bloc.querySelector('button').onclick = () => {
+        formulaire.hidden = !formulaire.hidden;
+      };
+
+      formulaire.onsubmit = async event => {
+        event.preventDefault();
+
+        if (role !== 'client' || !compte || envoyer.disabled) return;
+
+        const operationCompte = version;
+        const date = new Date(formulaire.elements.date.value);
+
+        if (!Number.isFinite(date.getTime()) ||
+            date.getTime() <= Date.now()) {
+          info.textContent = 'Choisis une date future.';
+          return;
+        }
+
+        envoyer.disabled = true;
+        info.textContent = 'Envoi en cours…';
+
+        try {
+          const {data, error} = await client.rpc(
+            'reserver_service', {
+              p_service_id: service.id,
+              p_date: date.toISOString(),
+              p_message: formulaire.elements.message.value.trim()
+            }
+          );
+
+          if (operationCompte !== version) return;
+          if (error) throw error;
+          if (data == null) throw new Error('Réservation non confirmée.');
+
+          formulaire.reset();
+          info.textContent = 'Réservation envoyée ! En attente du prestataire.';
+          await charger();
+
+        } catch(e) {
+          if (operationCompte === version) {
+            info.textContent = 'Erreur : ' + e.message;
+          }
+        } finally {
+          if (operationCompte === version) envoyer.disabled = false;
+        }
+      };
+
+      article.append(bloc);
+    }
+  }
+
+  const observer = new MutationObserver(() => {
+    ajouterReservations().catch(console.error);
+  });
+
+  observer.observe(zone, {childList:true});
+
+  ajouterReservations().catch(console.error);
+})();
+</script>
 </html>
+
 
