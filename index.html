@@ -721,7 +721,9 @@
     });
     liste.replaceChildren(...cartes);
   }
+document.addEventListener('DOMContentLoaded', () => {
   afficherCategories().catch(erreur => console.error('Catégories ProxiGo', erreur));
+});
 </script>
 <script>
 (() => {
