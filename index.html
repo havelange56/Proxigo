@@ -1619,10 +1619,35 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         if (['accepted','completed'].includes(reservation.status)) ajouterMessagerie();
 
-        function ajouterAvis() {
+        async function ajouterAvis() {
           if (carte.querySelector('.avis-direct')) return;
+          const bloc = document.createElement('div');
+          bloc.className = 'avis-direct';
+          bloc.textContent = 'Vérification de ton avis…';
+          carte.append(bloc);
+          const valide = () => operation === version && compte === utilisateur && carte.isConnected;
+          function afficherAvis(note, commentaire) {
+            const titreAvis = document.createElement('h4');
+            titreAvis.textContent = 'Avis déjà publié';
+            const etoiles = document.createElement('p');
+            etoiles.textContent = '★'.repeat(note) + '☆'.repeat(5-note) + ' — ' + note + '/5';
+            const texteAvis = document.createElement('p');
+            texteAvis.style.overflowWrap = 'anywhere';
+            texteAvis.textContent = commentaire || '';
+            const merci = document.createElement('p');
+            merci.textContent = 'Merci pour ton avis !';
+            bloc.replaceChildren(titreAvis, etoiles, texteAvis, merci);
+          }
+          try {
+            const {data,error} = await client.rpc('mon_avis_direct', {p_reservation_id:reservation.id});
+            if (!valide()) return;
+            if (error || !Array.isArray(data)) throw error || new Error('Réponse invalide');
+            if (data.length) { afficherAvis(data[0].note, data[0].commentaire); return; }
+          } catch {
+            if (valide()) bloc.textContent = 'Impossible de vérifier ton avis. Actualise tes réservations pour réessayer.';
+            return;
+          }
           const form = document.createElement('form');
-          form.className = 'avis-direct';
           form.innerHTML = `<h4>Noter la prestation</h4>
             <p><label>Note <select name="note" required><option value="">Choisir</option><option value="1">★ 1/5</option><option value="2">★★ 2/5</option><option value="3">★★★ 3/5</option><option value="4">★★★★ 4/5</option><option value="5">★★★★★ 5/5</option></select></label></p>
             <p><label>Commentaire public (facultatif)<br><textarea name="commentaire" maxlength="2000" rows="3"></textarea></label></p>
@@ -1639,12 +1664,15 @@ document.addEventListener('DOMContentLoaded', () => {
               const {data,error} = await client.rpc('publier_avis_direct', {p_reservation_id:reservation.id,p_note:Number(form.elements.note.value),p_commentaire:form.elements.commentaire.value.trim() || null});
               if (operation !== version || !carte.isConnected) return;
               if (error) throw error;
-              if (!data) {info.textContent = 'Avis non publié : un avis existe peut-être déjà pour cette réservation.'; action.disabled = false; return;}
-              form.replaceChildren(info);
-              info.textContent = 'Merci ! Ton avis a été publié.';
+              if (!data) {
+                bloc.remove();
+                await ajouterAvis();
+                return;
+              }
+              afficherAvis(Number(form.elements.note.value), form.elements.commentaire.value.trim());
             } catch {info.textContent = 'Publication impossible. Réessaie.'; action.disabled = false;}
           };
-          carte.append(form);
+          bloc.replaceChildren(form);
         }
         if (typeCompte === 'client' && reservation.status === 'completed') ajouterAvis();
         if (typeCompte === 'client' && reservation.status === 'accepted') {
