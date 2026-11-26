@@ -45,21 +45,30 @@
       border-radius: 12px;
       box-shadow: 0 3px 12px #00000010;
     }
+  
+    :root{--ink:#172b4d;--blue:#1769e0;--mint:#e7f8f2;--line:#dce5ef}
+    body{font-family:system-ui,-apple-system,BlinkMacSystemFont,Arial,sans-serif;background:#f7f9fc;color:var(--ink)}
+    header{background:white;color:var(--ink);padding:18px max(20px,calc((100% - 1120px)/2));text-align:left;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;gap:12px}
+    header h1{font-size:30px;letter-spacing:-1.8px;color:var(--blue)} header p{margin:0;font-size:12px;color:#52647a}
+    main{max-width:1160px;margin:auto;padding:24px 18px 48px} h2{letter-spacing:-.7px} p{overflow-wrap:anywhere}
+    .hero{background:linear-gradient(125deg,#e7f8f2,#eaf2ff);border-radius:26px;padding:48px 24px;margin-bottom:24px;text-align:center;border:1px solid #dcebe9}
+    .hero h2{font-size:clamp(32px,5vw,56px);line-height:1.08;max-width:740px;margin:14px auto;letter-spacing:-1.8px}.hero p{max-width:580px;margin:12px auto 24px;color:#41566e;font-size:17px}.eyebrow{font-size:12px;font-weight:800;letter-spacing:1.4px;color:#17694f}
+    .button,button:not(.service){font:inherit;font-weight:650;border:1px solid transparent;border-radius:12px;padding:12px 18px;cursor:pointer;background:var(--blue);color:white;min-height:44px;text-decoration:none} .button.secondary{background:white;color:var(--blue);border-color:#b9d1f5} button:disabled{opacity:.5;cursor:not-allowed} :focus-visible{outline:3px solid #e6a22d;outline-offset:3px}
+    .service{border:1px solid var(--line);border-radius:18px;box-shadow:0 4px 18px #172b4d08;padding:22px;overflow-wrap:anywhere} .services{max-width:100%;gap:14px} #services{grid-template-columns:repeat(auto-fit,minmax(145px,1fr));margin:18px auto 30px} #services .service{min-height:100px;font-weight:700!important;border:1px solid var(--line)!important;box-shadow:0 3px 12px #172b4d08} #services .service:hover{border-color:var(--blue)!important}
+    main>details{max-width:650px;margin:8px auto} summary{cursor:pointer} summary.button{list-style:none} summary.button::-webkit-details-marker{display:none} form{max-width:650px;margin:12px auto;text-align:left} input,textarea,select{width:100%;font:inherit;padding:12px;border:1px solid #bdcbdc;border-radius:10px;background:white;color:var(--ink)} label{font-weight:600} #resultats-categorie{max-width:1000px;margin:24px auto;padding:0 18px;text-align:center} #resultats-categorie .service{margin:12px auto;max-width:650px} .category-heading{text-align:left;margin:32px 0 0}.category-heading p{color:#52647a;margin:4px 0}.site-footer{text-align:center;padding:30px 16px;color:#52647a;border-top:1px solid var(--line);font-size:14px}
+    @media(max-width:480px){.hero{padding:32px 15px} .hero .button{display:block;margin:10px 0} header{padding:14px 18px} main{padding:16px 12px 32px} #services{grid-template-columns:repeat(2,minmax(0,1fr))} .service{padding:16px}}
+
   </style>
 </head>
 <body>
   <header>
-    <h1>ProxiGo</h1>
-    <p>Vos services de proximité, simplement.</p>
+    <div><h1>Proxi<span style="color:#16846b">Go</span></h1><p>Vos services de proximité</p></div><span style="font-size:13px;font-weight:700">🇧🇪 Belgique</span>
   </header>
   <main>
-    <h2>Besoin d'un coup de main ?</h2>
-    <p>Trouvez des prestataires près de chez vous.</p>
-    <a class="button" href="#services">Découvrir les services</a>
-    
-<button type="button" class="button" onclick="document.getElementById('connexion-client').closest('details').open = true; document.getElementById('connexion-client').closest('details').scrollIntoView({behavior:'smooth'});">Se connecter</button>
-<details>
-  <summary class="button">Publier une demande</summary>
+    <section class="hero"><span class="eyebrow">LES SERVICES DE PROXIMITÉ</span><h2>Trouvez de l’aide près de chez vous !</h2><p>Du ménage au bricolage, trouvez un prestataire ou proposez vos talents près de chez vous.</p><button class="button" type="button" onclick="ouvrirProxi('bloc-demande')">Demander un service</button><button class="button secondary" type="button" onclick="ouvrirProxi('bloc-prestataire')">Proposer mes services</button><a class="button secondary" href="#services">Découvrir les services</a></section>
+    <script>function ouvrirProxi(id){let e=document.getElementById(id);if(!e||e.closest('[hidden]')){e=document.getElementById('bloc-inscription');if(!e||e.hidden)e=document.getElementById('bloc-connexion');}if(e){e.open=true;e.scrollIntoView({behavior:'smooth',block:'center'});}}</script>
+<details id="bloc-connexion">
+  <summary class="button">Se connecter</summary>
   <form id="connexion-client" class="service" onsubmit="return false">
   <p><label>Adresse e-mail<br>
     <input name="email" type="email" autocomplete="username" required>
@@ -90,6 +99,7 @@
     boutonOubli.textContent = 'Mot de passe oublié';
     connexion.append(boutonOubli);
         const inscription = document.createElement('details');
+    inscription.id = 'bloc-inscription';
     inscription.innerHTML = `
       <summary class="button">Créer un compte</summary>
       <form class="service">
@@ -111,7 +121,7 @@
         <p role="status"></p>
       </form>
     `;
-    connexion.closest('details').before(inscription);
+    connexion.closest('details').after(inscription);
 
     const formulaireInscription = inscription.querySelector('form');
     const boutonInscription = formulaireInscription.querySelector('button');
@@ -285,6 +295,8 @@
 
       proxiGo.auth.onAuthStateChange((_evenement, session) => {
         connecte = Boolean(session);
+        demande.hidden = !connecte;
+        document.getElementById('invitation-connexion').hidden = connecte;
         envoyer.disabled = !connecte || enCours;
         if (!enCours) {
           message.textContent = connecte ? '' : 'Connecte-toi pour envoyer une demande.';
@@ -533,9 +545,15 @@
         bouton.disabled = false;
       }
     });
-    proxiGo.auth.onAuthStateChange((_evenement, session) => {
+    proxiGo.auth.onAuthStateChange((evenement, session) => {
+      const bloc = connexion.closest('details');
+      bloc.querySelector('summary').textContent = session ? 'Mon compte' : 'Se connecter';
+      inscription.hidden = Boolean(session);
+      if (session) inscription.open = false;
+      if (evenement === 'SIGNED_IN' || evenement === 'PASSWORD_RECOVERY') bloc.open = true;
       connexion.hidden = Boolean(session);
       deconnexion.hidden = !session;
+      deconnexion.classList.add('button');
       etatConnexion.textContent = session ? 'Tu es connecté.' : '';
       boutonConnexion.disabled = false;
     });
@@ -568,7 +586,11 @@
     etatConnexion.textContent = 'Connexion indisponible. Recharge la page.';
   }
 </script>
-      <form class="service" onsubmit="return false">
+</details>
+<details id="bloc-demande">
+  <summary class="button">Publier une demande</summary>
+  <p id="invitation-connexion">Connecte-toi ou crée un compte client pour publier. <button type="button" class="button" onclick="document.getElementById('bloc-connexion').open=true;document.getElementById('bloc-connexion').scrollIntoView({behavior:'smooth'})">Se connecter</button></p>
+      <form id="formulaire-demande" hidden class="service" onsubmit="return false">
   <p><label>Titre de la demande<br>
     <input name="title" type="text" required>
   </label></p>
@@ -600,7 +622,7 @@
 <p>Connecte-toi pour envoyer une demande.</p>
 </form>
 </details>
-    <section id="services" class="services">
+    <div class="category-heading"><h2>Explorez les catégories</h2><p>Choisissez le service dont vous avez besoin.</p></div><section id="services" class="services">
       <div class="service">🔧 Bricolage</div>
       <div class="service">🧹 Nettoyage</div>
       <div class="service">🌳 Jardinage</div>
@@ -995,7 +1017,7 @@ document.addEventListener('DOMContentLoaded', () => {
   section.hidden = true;
 
   section.innerHTML = `
-    <details>
+    <details id="bloc-prestataire">
       <summary class="button">Publier un service</summary>
       <h2>Proposer mes services</h2>
 
@@ -1139,7 +1161,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 })();
-</script></body>
+</script>
 
 <script>
 (() => {
@@ -1909,4 +1931,6 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 })();
 </script>
+<footer class="site-footer">ProxiGo · Les services de proximité en Belgique</footer>
+</body>
 </html>
