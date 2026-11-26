@@ -56,7 +56,9 @@
     <h2>Besoin d'un coup de main ?</h2>
     <p>Trouvez des prestataires près de chez vous.</p>
     <a class="button" href="#services">Découvrir les services</a>
-    <details>
+    
+<button type="button" class="button" onclick="document.getElementById('connexion-client').closest('details').open = true; document.getElementById('connexion-client').closest('details').scrollIntoView({behavior:'smooth'});">Se connecter</button>
+<details>
   <summary class="button">Publier une demande</summary>
   <form id="connexion-client" class="service" onsubmit="return false">
   <p><label>Adresse e-mail<br>
