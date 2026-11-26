@@ -1863,4 +1863,48 @@ document.addEventListener('DOMContentLoaded', () => {
   ajouterReservations().catch(console.error);
 })();
 </script>
+<script>
+(() => {
+  const client = window.proxiGoClient;
+  if (!client) return;
+  const section = document.createElement('section');
+  section.className = 'service';
+  section.style.cssText = 'max-width:650px;margin:25px auto;';
+  section.hidden = true;
+  section.innerHTML = `<h2>Mes paiements</h2><p>Stripe — mode test, aucun paiement réel.</p><button type="button" class="button">Configurer mes paiements</button><p role="status"></p>`;
+  document.getElementById('services').before(section);
+  const bouton = section.querySelector('button');
+  const info = section.querySelector('[role="status"]');
+  let version = 0;
+  let compte = null;
+  client.auth.onAuthStateChange((_event, session) => {
+    const tour = ++version;
+    compte = null; section.hidden = true; bouton.disabled = true; info.textContent = '';
+    if (!session) return;
+    setTimeout(async () => {
+      const {data,error} = await client.from('profiles').select('account_type').eq('id',session.user.id).single();
+      if (tour !== version || error || data?.account_type !== 'provider') return;
+      compte = session.user.id; section.hidden = false; bouton.disabled = false;
+    },0);
+  });
+  bouton.onclick = async () => {
+    if (!compte || bouton.disabled) return;
+    const tour = version;
+    bouton.disabled = true; info.textContent = 'Connexion à Stripe…';
+    try {
+      const {data: auth,error: authError} = await client.auth.getSession();
+      if (authError || auth.session?.user.id !== compte || tour !== version) throw new Error('Reconnecte-toi.');
+      const {data,error} = await client.functions.invoke('stripe-connect',{body:{},headers:{Authorization:'Bearer '+auth.session.access_token}});
+      if (tour !== version) return;
+      if (error) throw error;
+      if (data?.status === 'active') { info.textContent = 'Compte Stripe actif.'; return; }
+      const url = new URL(data?.url);
+      if (url.protocol !== 'https:' || url.hostname !== 'connect.stripe.com') throw new Error('Lien Stripe invalide.');
+      window.location.assign(url.href);
+    } catch (e) {
+      if (tour === version) info.textContent = 'Configuration Stripe impossible : '+e.message;
+    } finally { if (tour === version) bouton.disabled = false; }
+  };
+})();
+</script>
 </html>
