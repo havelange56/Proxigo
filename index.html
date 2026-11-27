@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>ProxiGo - Services près de chez vous</title>
+  <title>Taskivoo - Services près de chez vous</title>
   <style>
     * { box-sizing: border-box; }
     body {
@@ -58,11 +58,23 @@
     main>details{max-width:650px;margin:8px auto} summary{cursor:pointer} summary.button{list-style:none} summary.button::-webkit-details-marker{display:none} form{max-width:650px;margin:12px auto;text-align:left} input,textarea,select{width:100%;font:inherit;padding:12px;border:1px solid #bdcbdc;border-radius:10px;background:white;color:var(--ink)} label{font-weight:600} #resultats-categorie{max-width:1000px;margin:24px auto;padding:0 18px;text-align:center} #resultats-categorie .service{margin:12px auto;max-width:650px} .category-heading{text-align:left;margin:32px 0 0}.category-heading p{color:#52647a;margin:4px 0}.site-footer{text-align:center;padding:30px 16px;color:#52647a;border-top:1px solid var(--line);font-size:14px}
     @media(max-width:480px){.hero{padding:32px 15px} .hero .button{display:block;margin:10px 0} header{padding:14px 18px} main{padding:16px 12px 32px} #services{grid-template-columns:repeat(2,minmax(0,1fr))} .service{padding:16px}}
 
+  
+    /* Taskivoo visual identity */
+    :root{--ink:#142c42;--blue:#145ac7;--mint:#e5f7ef;--line:#dce7ed}
+    body{background:#f4f8fa}
+    header h1{font-size:34px;font-weight:850;letter-spacing:-1.6px}
+    .hero{background:linear-gradient(135deg,#e1f7ed 0%,#edf5ff 75%);border-color:#d2e8e4;box-shadow:0 12px 35px #173c5010}
+    .hero h2{color:#142c42}.hero .eyebrow{color:#08765b}
+    .button,button:not(.service){box-shadow:0 2px 5px #145ac715}
+    .button.secondary{color:#145ac7;background:#fff}
+    #services .service{border-radius:16px;background:#fff;color:var(--ink)}
+    .category-heading h2{color:#142c42}.site-footer{background:#e8f4ef;color:#254d46}
+    @media(max-width:480px){header h1{font-size:29px}.hero h2{font-size:34px}}
   </style>
 </head>
 <body>
   <header>
-    <div><h1>Proxi<span style="color:#16846b">Go</span></h1><p>Vos services de proximité</p></div><span style="font-size:13px;font-weight:700">🇧🇪 Belgique</span>
+    <div><h1>Taski<span style="color:#16846b">voo</span></h1><p>Vos services de proximité</p></div><span style="font-size:13px;font-weight:700">🇧🇪 Belgique</span>
   </header>
   <main>
     <section class="hero"><span class="eyebrow">LES SERVICES DE PROXIMITÉ</span><h2>Trouvez de l’aide près de chez vous !</h2><p>Du ménage au bricolage, trouvez un prestataire ou proposez vos talents près de chez vous.</p><button class="button" type="button" onclick="ouvrirProxi('bloc-demande')">Demander un service</button><button class="button secondary" type="button" onclick="ouvrirProxi('bloc-prestataire')">Proposer mes services</button><a class="button secondary" href="#services">Découvrir les services</a></section>
@@ -643,7 +655,7 @@
       <div></div>
     </section>
     <section id="messagerie" class="service" hidden style="max-width:650px;margin:25px auto;text-align:left">
-      <h2>💬 Messagerie ProxiGo</h2>
+      <h2>💬 Messagerie Taskivoo</h2>
       <p>Pour écrire à quelqu’un, indique son identifiant de compte. La messagerie nécessite une table « messages » autorisée dans Supabase.</p>
       <button id="voir-messages" type="button" class="button">Afficher mes messages</button>
       <p id="etat-messages" role="status"></p>
@@ -706,7 +718,7 @@
           zone.replaceChildren();
           if (resultat.error) {
             zone.textContent = 'Impossible de charger les ' + type + '. Vérifie les autorisations de lecture dans Supabase.';
-            console.error('ProxiGo ' + type, resultat.error);
+            console.error('Taskivoo ' + type, resultat.error);
             return;
           }
           const titre = document.createElement('h3');
@@ -775,7 +787,7 @@
     liste.replaceChildren(...cartes);
   }
 document.addEventListener('DOMContentLoaded', () => {
-  afficherCategories().catch(erreur => console.error('Catégories ProxiGo', erreur));
+  afficherCategories().catch(erreur => console.error('Catégories Taskivoo', erreur));
 });
 </script>
 <script>
@@ -855,7 +867,7 @@ document.addEventListener('DOMContentLoaded', () => {
   ancien.replaceWith(section);
 
   section.innerHTML = `
-    <h2>💬 Messagerie ProxiGo</h2>
+    <h2>💬 Messagerie Taskivoo</h2>
     <button class="button" id="charger-conversations">
       Afficher mes conversations
     </button>
@@ -1436,7 +1448,7 @@ document.addEventListener('DOMContentLoaded', () => {
           badge.setAttribute('aria-label', (r.count || 0) + ' messages non lus');
         }
       }
-    } catch (e) { console.warn('Notifications ProxiGo', e); }
+    } catch (e) { console.warn('Notifications Taskivoo', e); }
   }
   setInterval(actualiserNotifications, 10000);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) actualiserNotifications(); });
@@ -1931,6 +1943,6 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 })();
 </script>
-<footer class="site-footer">ProxiGo · Les services de proximité en Belgique</footer>
+<footer class="site-footer">Taskivoo · Les services de proximité en Belgique</footer>
 </body>
 </html>
